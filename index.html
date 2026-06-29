@@ -439,7 +439,7 @@ react-dom/cjs/react-dom-client.production.js:
 
   /* ---------- SCAN (Route A) ---------- */
   function openScan(clientId, back) {
-    var box = overlay(); header(box, "📷 Scanner une mesure", back);
+    var box = overlay(); header(box, "📷 Scanner une mesure", back); var __nm = (findClient(id) || {}).nom; if (__nm) { var __s = document.createElement("div"); __s.style.cssText = "font-size:12px;color:" + C.gold + ";font-weight:700;margin:-4px 0 12px"; __s.textContent = "Cliente : " + __nm; box.appendChild(__s); }
     var intro = document.createElement("div"); intro.style.cssText = "font-size:12px;color:" + C.dim + ";margin-bottom:12px";
     intro.textContent = "Importe une capture d'écran nette (balance, Apple Santé, étiquette…) ou prends une photo. Les chiffres sont lus automatiquement — tu vérifies, puis tu valides.";
     box.appendChild(intro);
@@ -937,7 +937,7 @@ react-dom/cjs/react-dom-client.production.js:
     return '<div>' + svgLineLabeled(vals, f.col || C.gold) + '<div style="display:flex;justify-content:space-between;font-size:11px;color:' + C.dim + ';margin-top:6px"><span>min ' + min + '</span><span style="color:' + good + ';font-weight:700">' + trend + (f.unit ? (" " + f.unit) : "") + '</span><span>max ' + max + '</span></div></div>';
   }
   function openMeasures(id, back) {
-    var box = overlay(); header(box, "📊 Mesures & évolution", back);
+    var box = overlay(); header(box, "📊 Mesures & évolution", back); var __nm = (findClient(id) || {}).nom; if (__nm) { var __s = document.createElement("div"); __s.style.cssText = "font-size:12px;color:" + C.gold + ";font-weight:700;margin:-4px 0 12px"; __s.textContent = "Cliente : " + __nm; box.appendChild(__s); }
     var body = document.createElement("div"); body.innerHTML = '<div style="color:' + C.dim + '">Chargement…</div>'; box.appendChild(body);
     loadScans(id).then(function (measures) {
       body.innerHTML = "";
