@@ -398,13 +398,13 @@ react-dom/cjs/react-dom-client.production.js:
   var CAT = { posture: "🧍", mobilite: "🌀", force: "💪", respiration: "🌬️", menager: "🏠" };
   function btnStyle() { return "position:fixed;left:14px;bottom:14px;z-index:9000;background:" + C.card + ";color:" + C.gold + ";border:1.5px solid " + C.gold + "66;border-radius:24px;padding:10px 16px;font:600 13px system-ui,-apple-system,sans-serif;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.45)"; }
   function overlay() { var old = document.getElementById("exh-ov"); if (old) old.remove(); var ov = document.createElement("div"); ov.id = "exh-ov"; ov.style.cssText = "position:fixed;inset:0;z-index:99990;background:rgba(8,20,15,.86);display:flex;align-items:center;justify-content:center;padding:16px;font:14px system-ui,-apple-system,sans-serif"; var box = document.createElement("div"); box.style.cssText = "background:" + C.bg + ";border:1.5px solid " + C.gold + "55;border-radius:16px;width:100%;max-width:680px;max-height:88vh;overflow:auto;padding:18px;color:" + C.text; ov.appendChild(box); ov.addEventListener("click", function (e) { if (e.target === ov) ov.remove(); }); document.body.appendChild(ov); return box; }
-  function header(box, title) { var h = document.createElement("div"); h.style.cssText = "display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"; h.innerHTML = '<div style="font-weight:800;color:' + C.gold + ';font-size:16px">' + title + '</div>'; var x = document.createElement("button"); x.textContent = "×"; x.style.cssText = "background:none;border:none;color:" + C.dim + ";font-size:24px;cursor:pointer;line-height:1"; x.onclick = function () { var o = document.getElementById("exh-ov"); if (o) o.remove(); }; h.appendChild(x); box.appendChild(h); }
+  function header(box, title, backFn) { var h = document.createElement("div"); h.style.cssText = "display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"; var left=document.createElement("div");left.style.cssText="display:flex;align-items:center;gap:8px";if(backFn){var bk=document.createElement("button");bk.textContent="‹";bk.style.cssText="background:none;border:none;color:"+C.gold+";font-size:22px;cursor:pointer;line-height:1";bk.onclick=backFn;left.appendChild(bk);}var ttl=document.createElement("div");ttl.style.cssText="font-weight:800;color:"+C.gold+";font-size:16px";ttl.textContent=title;left.appendChild(ttl);h.appendChild(left); var x = document.createElement("button"); x.textContent = "×"; x.style.cssText = "background:none;border:none;color:" + C.dim + ";font-size:24px;cursor:pointer;line-height:1"; x.onclick = function () { var o = document.getElementById("exh-ov"); if (o) o.remove(); }; h.appendChild(x); box.appendChild(h); }
   function bar(pct, col) { return '<div style="height:7px;background:' + C.border + ';border-radius:4px;overflow:hidden"><div style="height:100%;width:' + Math.min(100, pct) + '%;background:' + col + ';border-radius:4px"></div></div>'; }
   function chip(label, val, unit) { return '<div style="background:' + C.surf + ';border:1px solid ' + C.border + ';border-radius:8px;padding:6px 10px;font-size:12px"><span style="color:' + C.dim + '">' + label + ' </span><b style="color:' + C.gold + '">' + val + (unit ? (" " + unit) : "") + '</b></div>'; }
 
   /* ---------- SCAN (Route A) ---------- */
-  function openScan(clientId) {
-    var box = overlay(); header(box, "📷 Scanner une mesure");
+  function openScan(clientId, back) {
+    var box = overlay(); header(box, "📷 Scanner une mesure", back);
     var intro = document.createElement("div"); intro.style.cssText = "font-size:12px;color:" + C.dim + ";margin-bottom:12px";
     intro.textContent = "Importe une capture d'écran nette (balance, Apple Santé, étiquette…) ou prends une photo. Les chiffres sont lus automatiquement — tu vérifies, puis tu valides.";
     box.appendChild(intro);
@@ -480,8 +480,8 @@ react-dom/cjs/react-dom-client.production.js:
   }
 
   /* ---------- CLIENTE ---------- */
-  function openTasks(clientId) {
-    var box = overlay(); header(box, "🧮 Mon suivi du jour");
+  function openTasks(clientId, back) {
+    var box = overlay(); header(box, "🧮 Mon suivi du jour", back);
     var top = document.createElement("div"); box.appendChild(top);
     top.innerHTML = '<div style="color:' + C.dim + ';font-size:12px;margin-bottom:12px">Chargement…</div>';
     Promise.all([loadTargets(clientId), loadScans(clientId)]).then(function (res) {
@@ -493,7 +493,7 @@ react-dom/cjs/react-dom-client.production.js:
       top.innerHTML = html;
       var scanBtn = document.createElement("button"); scanBtn.textContent = "📷 Scanner une mesure (poids, masse grasse…)";
       scanBtn.style.cssText = "width:100%;padding:11px;margin-bottom:14px;border:1.5px solid " + C.gold + "66;border-radius:12px;background:" + C.card + ";color:" + C.gold + ";font-weight:700;cursor:pointer";
-      scanBtn.onclick = function () { openScan(clientId); };
+      scanBtn.onclick = function () { openScan(clientId, function(){ openTasks(clientId, back); }); };
       top.appendChild(scanBtn);
       renderTaskList(box, clientId);
     }).catch(function () { top.innerHTML = ""; renderTaskList(box, clientId); });
@@ -532,8 +532,8 @@ react-dom/cjs/react-dom-client.production.js:
       });
     }));
   }
-  function openCoach() {
-    var box = overlay(); header(box, "📊 Récap & réglages");
+  function openCoach(back) {
+    var box = overlay(); header(box, "📊 Récap & réglages", back);
     var body = document.createElement("div"); body.innerHTML = '<div style="color:' + C.dim + '">Chargement…</div>'; box.appendChild(body);
     buildToday().then(function (rows) {
       var act = rows.filter(function (r) { return r.active; });
@@ -575,12 +575,66 @@ react-dom/cjs/react-dom-client.production.js:
     var s = session(), btn = document.getElementById("exh-btn");
     if (!s) { if (btn) btn.remove(); return; }
     if (!btn) { btn = document.createElement("button"); btn.id = "exh-btn"; btn.style.cssText = btnStyle(); document.body.appendChild(btn); }
-    if (s.role === "coach") { btn.textContent = "📊 Récap"; btn.onclick = openCoach; coachRecapNotif(); }
-    else if (s.role === "client" && s.clientId) { btn.textContent = "🧮 Mon suivi"; btn.onclick = function () { openTasks(s.clientId); }; }
+    if (s.role === "coach") { btn.textContent = "✦ Tableau de bord"; btn.onclick = openDashboard; coachRecapNotif(); }
+    else if (s.role === "client" && s.clientId) { btn.textContent = "✦ Tableau de bord"; btn.onclick = openDashboard; }
     else { btn.remove(); }
   }
   window.addEventListener("load", function () { setTimeout(refreshButton, 1500); });
   setInterval(refreshButton, 4000);
+  /* ===================== TABLEAU DE BORD PREMIUM (v5) ===================== */
+  var BELTS = [{ n: "Blanche", c: "#EDEDE4", min: 0 }, { n: "Jaune", c: "#E8C84A", min: 2 }, { n: "Orange", c: "#E0852E", min: 5 }, { n: "Verte", c: "#4FA06A", min: 9 }, { n: "Bleue", c: "#3E7CB1", min: 14 }, { n: "Marron", c: "#7A4B2B", min: 20 }, { n: "Noire", c: "#171310", min: 28 }];
+  function belt(j) { var b = BELTS[0]; BELTS.forEach(function (x) { if (j >= x.min) b = x; }); return b; }
+  function ergoSeries(id, days) { var raw = rLS("exhome_ergo_" + id) || {}, out = []; for (var i = days - 1; i >= 0; i--) { var d = new Date(); d.setDate(d.getDate() - i); var k = d.toISOString().split("T")[0], e = raw[k] || {}; out.push({ label: d.toLocaleDateString("fr-FR", { weekday: "short" }).charAt(0).toUpperCase(), value: (e.squat || 0) + (e.hinge || 0) + (e.fente || 0), today: i === 0 }); } return out; }
+  var BAR = "#2A6048";
+  function svgBars(items) { var W = 300, Hh = 92, n = items.length || 1, gap = 4, max = Math.max(1, Math.max.apply(null, items.map(function (i) { return i.value; }))), bw = (W - (n - 1) * gap) / n; var b = items.map(function (it, i) { var bh = Math.max(2, it.value / max * (Hh - 22)), x = i * (bw + gap), y = Hh - 18 - bh, col = it.hi ? C.gold : BAR; return '<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + bh.toFixed(1) + '" rx="2" fill="' + col + '"/>' + (it.value > 0 ? '<text x="' + (x + bw / 2).toFixed(1) + '" y="' + (y - 2).toFixed(1) + '" font-size="8" fill="' + C.dim + '" text-anchor="middle">' + it.value + '</text>' : '') + '<text x="' + (x + bw / 2).toFixed(1) + '" y="' + (Hh - 5) + '" font-size="8" fill="' + C.dim + '" text-anchor="middle">' + it.label + '</text>'; }).join(""); return '<svg viewBox="0 0 ' + W + ' ' + Hh + '" width="100%" height="' + Hh + '">' + b + '</svg>'; }
+  function svgLine(vals) { if (!vals.length) return ""; var W = 300, Hh = 64, max = Math.max.apply(null, vals), min = Math.min.apply(null, vals), rng = (max - min) || 1; var pts = vals.map(function (v, i) { var x = vals.length > 1 ? i / (vals.length - 1) * W : 0, y = Hh - 6 - ((v - min) / rng) * (Hh - 14); return x.toFixed(1) + "," + y.toFixed(1); }); var line = pts.join(" "); return '<svg viewBox="0 0 ' + W + ' ' + Hh + '" width="100%" height="' + Hh + '"><polygon points="0,' + Hh + ' ' + line + ' ' + W + ',' + Hh + '" fill="' + C.gold + '22"/><polyline points="' + line + '" fill="none" stroke="' + C.gold + '" stroke-width="2"/></svg>'; }
+  function svgRing(pct, label, sub) { var r = 34, c = 2 * Math.PI * r, off = c * (1 - Math.min(1, pct / 100)); return '<svg viewBox="0 0 90 90" width="84" height="84" style="flex-shrink:0"><circle cx="45" cy="45" r="' + r + '" fill="none" stroke="' + C.border + '" stroke-width="8"/><circle cx="45" cy="45" r="' + r + '" fill="none" stroke="' + (pct >= 100 ? C.ok : C.gold) + '" stroke-width="8" stroke-linecap="round" stroke-dasharray="' + c.toFixed(1) + '" stroke-dashoffset="' + off.toFixed(1) + '" transform="rotate(-90 45 45)"/><text x="45" y="44" font-size="15" font-weight="800" fill="' + C.text + '" text-anchor="middle">' + label + '</text><text x="45" y="58" font-size="7.5" fill="' + C.dim + '" text-anchor="middle">' + sub + '</text></svg>'; }
+  function addTile(grid, emoji, label, fn) { var b = document.createElement("button"); b.style.cssText = "display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:14px;border-radius:14px;border:1px solid " + C.border + ";background:" + C.card + ";color:" + C.text + ";cursor:pointer;text-align:left"; b.innerHTML = '<span style="font-size:22px">' + emoji + '</span><span style="font-size:13px;font-weight:700">' + label + '</span>'; b.onclick = fn; grid.appendChild(b); }
+
+  function openClientDash(id) {
+    var box = overlay(); header(box, "✦ Mon tableau de bord");
+    var c = findClient(id) || {}, prenom = (c.nom || "").split(" ")[0] || "";
+    var body = document.createElement("div"); body.innerHTML = '<div style="color:' + C.dim + '">Chargement…</div>'; box.appendChild(body);
+    Promise.all([loadTargets(id), loadScans(id)]).then(function (res) {
+      var tg = res[0] || { ram: 0, basale: 0 }, measures = res[1] || [];
+      var jours = ((c.joursReussis) || []).length, bt = belt(jours), ram = todayRam(id);
+      var week = ergoSeries(id, 7), month = ergoSeries(id, 30), mv = month.map(function (x) { return x.value; }), monthTot = mv.reduce(function (a, b) { return a + b; }, 0);
+      var poidsPts = measures.filter(function (m) { return m.poids != null; }).map(function (m) { return m.poids; });
+      var lastM = measures.length ? measures[measures.length - 1] : null;
+      var html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><div><div style="font-size:18px;font-weight:800">Bonjour ' + prenom + ' 👋</div><div style="font-size:11px;color:' + C.dim + '">' + new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" }) + '</div></div><div style="text-align:center"><div style="width:46px;height:14px;border-radius:3px;background:' + bt.c + ';margin:0 auto;border:1px solid rgba(255,255,255,.25)"></div><div style="font-size:10px;color:' + C.gold + ';margin-top:3px;font-weight:700">Ceinture ' + bt.n + '</div></div></div>';
+      if (tg.ram > 0) { var pct = Math.round(ram / tg.ram * 100); html += '<div style="display:flex;align-items:center;gap:14px;background:' + C.card + ';border:1px solid ' + C.border + ';border-radius:14px;padding:14px;margin-bottom:12px">' + svgRing(pct, ram + "/" + tg.ram, "ramassages") + '<div style="flex:1"><div style="font-size:12px;font-weight:700">🎯 Objectif du jour</div><div style="font-size:11px;color:' + C.dim + ';margin-top:3px">' + (ram >= tg.ram ? "Objectif atteint, bravo ! 🎉" : (tg.ram - ram) + " ramassages restants") + '</div>' + (tg.basale > 0 ? '<div style="font-size:11px;color:' + C.dim + ';margin-top:6px">🔥 Basale : <b style="color:' + C.gold + '">' + tg.basale + ' kcal</b></div>' : '') + '</div></div>'; }
+      html += '<div style="background:' + C.card + ';border:1px solid ' + C.border + ';border-radius:14px;padding:14px;margin-bottom:12px"><div style="font-size:12px;font-weight:700;margin-bottom:8px">📈 Mes ramassages cette semaine</div>' + svgBars(week.map(function (x) { return { label: x.label, value: x.value, hi: x.today }; })) + '</div>';
+      html += '<div style="background:' + C.card + ';border:1px solid ' + C.border + ';border-radius:14px;padding:14px;margin-bottom:12px"><div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-size:12px;font-weight:700">🗓 30 derniers jours</span><span style="font-size:12px;color:' + C.gold + ';font-weight:800">' + monthTot + ' <span style="font-size:10px;color:' + C.dim + '">ramassages</span></span></div>' + svgLine(mv) + '</div>';
+      if (lastM) { var mc = []; if (lastM.poids != null) mc.push(chip("⚖️", lastM.poids, "kg")); if (lastM.graisse != null) mc.push(chip("🫀", lastM.graisse, "%")); if (lastM.calories != null) mc.push(chip("🔥", lastM.calories, "kcal")); html += '<div style="background:' + C.card + ';border:1px solid ' + C.border + ';border-radius:14px;padding:14px;margin-bottom:12px"><div style="font-size:12px;font-weight:700;margin-bottom:8px">⚖️ Mes mesures</div>' + (poidsPts.length > 1 ? svgLine(poidsPts) : '') + '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">' + mc.join("") + '</div></div>'; }
+      body.innerHTML = html;
+      var grid = document.createElement("div"); grid.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:2px";
+      addTile(grid, "🧮", "Mes tâches", function () { openTasks(id, function () { openClientDash(id); }); });
+      addTile(grid, "📷", "Scanner une mesure", function () { openScan(id, function () { openClientDash(id); }); });
+      body.appendChild(grid);
+    }).catch(function () { body.innerHTML = '<div style="color:#E07060">Erreur de chargement.</div>'; });
+  }
+
+  function openCoachDash() {
+    var box = overlay(); header(box, "✦ Tableau de bord");
+    var body = document.createElement("div"); body.innerHTML = '<div style="color:' + C.dim + '">Chargement…</div>'; box.appendChild(body);
+    buildToday().then(function (rows) {
+      var act = rows.filter(function (r) { return r.active; });
+      var totRam = rows.reduce(function (s, r) { return s + r.ram; }, 0), totTasks = rows.reduce(function (s, r) { return s + r.taskTot; }, 0);
+      var html = '<div style="display:flex;gap:10px;margin-bottom:14px">';
+      [[act.length, "clientes actives"], [totRam, "ramassages"], [totTasks, "tâches faites"]].forEach(function (s) { html += '<div style="flex:1;background:' + C.card + ';border:1px solid ' + C.border + ';border-radius:14px;padding:14px;text-align:center"><div style="font-size:24px;font-weight:900;color:' + C.gold + '">' + s[0] + '</div><div style="font-size:10px;color:' + C.dim + '">' + s[1] + '</div></div>'; });
+      html += '</div>';
+      if (act.length) { var bars = act.slice(0, 8).map(function (r) { return { label: (r.nom || "?").slice(0, 3), value: r.ram, hi: false }; }); html += '<div style="background:' + C.card + ';border:1px solid ' + C.border + ';border-radius:14px;padding:14px;margin-bottom:12px"><div style="font-size:12px;font-weight:700;margin-bottom:8px">💪 Ramassages par cliente (aujourd\'hui)</div>' + svgBars(bars) + '</div>'; }
+      else html += '<div style="background:' + C.card + ';border:1px solid ' + C.border + ';border-radius:14px;padding:18px;text-align:center;color:' + C.dim + ';margin-bottom:12px;font-size:12px">Personne n\'a encore bougé aujourd\'hui.</div>';
+      body.innerHTML = html;
+      var grid = document.createElement("div"); grid.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:10px";
+      addTile(grid, "📊", "Récap & réglages", function () { openCoach(function () { openCoachDash(); }); });
+      addTile(grid, "📷", "Scanner (via une cliente)", function () { openCoach(function () { openCoachDash(); }); });
+      body.appendChild(grid);
+    }).catch(function () { body.innerHTML = '<div style="color:#E07060">Erreur réseau.</div>'; });
+    coachRecapNotif();
+  }
+
+  function openDashboard() { var s = session(); if (!s) return; if (s.role === "coach") openCoachDash(); else if (s.role === "client" && s.clientId) openClientDash(s.clientId); }
 })();
 </script>
 </body></html>
