@@ -685,6 +685,7 @@ react-dom/cjs/react-dom-client.production.js:
     st.textContent =
       '#root img[style*="border-radius: 50%"],#root img[style*="border-radius:50%"]' +
       '{object-fit:cover !important;object-position:center !important;}' +
+      '.exh-tile{transition:transform .12s ease,box-shadow .12s ease,border-color .12s ease}.exh-tile:hover{transform:translateY(-2px);border-color:rgba(201,168,76,.55) !important;box-shadow:0 7px 20px rgba(0,0,0,.45) !important}.exh-tile:active{transform:scale(.96)}' +
       '#root div[style*="rgba(0, 0, 0, 0.35)"],#root div[style*="rgba(0,0,0,0.35)"],#root div[style*="rotate(22deg)"],#root div[style*="rotate(-16deg)"]{display:none !important;}';
     document.head.appendChild(st);
   }
@@ -1185,18 +1186,23 @@ react-dom/cjs/react-dom-client.production.js:
       nat("💬", "Messages", "Messages")
     ];
     if (coach) { tiles.push(nat("🔍", "Audit", "Audit")); tiles.push({ emoji: "🗂️", label: "Récap", fn: function () { openCoach(); } }); }
+    var ORANGE = "#E0852E";
     tiles.forEach(function (t) {
-      var b = document.createElement("button");
-      b.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:" + (mob ? 9 : 7) + "px;background:" + C.surf + ";border:1px solid " + C.border + ";border-radius:18px;padding:" + (mob ? 18 : 14) + "px 6px;cursor:pointer;color:" + C.text + ";font-family:inherit";
-      var em = document.createElement("div"); em.textContent = t.emoji; em.style.cssText = "font-size:" + (mob ? 32 : 28) + "px;line-height:1";
-      var lb = document.createElement("div"); lb.textContent = t.label; lb.style.cssText = "font-size:" + (mob ? 12 : 11) + "px;font-weight:600;text-align:center;color:" + C.text;
-      b.appendChild(em); b.appendChild(lb); b.onclick = t.fn;
+      var b = document.createElement("button"); b.className = "exh-tile";
+      b.style.cssText = "position:relative;overflow:hidden;display:flex;flex-direction:column;align-items:center;gap:" + (mob ? 10 : 8) + "px;background:linear-gradient(160deg," + C.card + "," + C.surf + ");border:1px solid rgba(201,168,76,.28);border-radius:20px;padding:" + (mob ? 18 : 16) + "px 8px;cursor:pointer;color:" + C.text + ";font-family:inherit;box-shadow:0 2px 8px rgba(0,0,0,.32), inset 0 1px 0 rgba(255,255,255,.05)";
+      var plate = document.createElement("div");
+      plate.style.cssText = "width:" + (mob ? 52 : 46) + "px;height:" + (mob ? 52 : 46) + "px;border-radius:15px;display:flex;align-items:center;justify-content:center;background:linear-gradient(140deg,rgba(201,168,76,.17),rgba(224,133,46,.11));border:1px solid rgba(201,168,76,.30);box-shadow:inset 0 1px 0 rgba(255,255,255,.07)";
+      var em = document.createElement("div"); em.textContent = t.emoji; em.style.cssText = "font-size:" + (mob ? 28 : 25) + "px;line-height:1";
+      plate.appendChild(em);
+      var lb = document.createElement("div"); lb.textContent = t.label; lb.style.cssText = "font-size:" + (mob ? 12 : 11) + "px;font-weight:700;text-align:center;color:" + C.text + ";letter-spacing:.01em";
+      var accent = document.createElement("div"); accent.style.cssText = "position:absolute;left:14%;right:14%;bottom:0;height:2.5px;border-radius:2px;background:linear-gradient(90deg,transparent,rgba(224,133,46,.55)," + C.gold + ",transparent)";
+      b.appendChild(plate); b.appendChild(lb); b.appendChild(accent); b.onclick = t.fn;
       grid.appendChild(b);
     });
     box.appendChild(grid);
     var ver = document.createElement("div");
     ver.style.cssText = "text-align:center;font-size:11px;color:" + C.dim + ";margin-top:16px;opacity:.8";
-    ver.textContent = "Ex Home · interface v17 (29-06)";
+    ver.textContent = "Ex Home · interface v18 (29-06)";
     box.appendChild(ver);
   }
 })();
