@@ -501,10 +501,16 @@ react-dom/cjs/react-dom-client.production.js:
   function measuresCard(measures) {
     if (!measures || !measures.length) return "";
     var last = measures[measures.length - 1];
-    var chips = SCAN_FIELDS.filter(function (f) { return last[f.k] != null; }).map(function (f) { return chip(f.emoji, last[f.k], f.unit); });
-    if (!chips.length) return "";
+    var fields = SCAN_FIELDS.filter(function (f) { return last[f.k] != null && last[f.k] !== 0; });
+    if (!fields.length) return "";
+    var chips = fields.map(function (f) {
+      return '<div style="display:flex;align-items:center;gap:7px;background:' + C.surf + ';border:1px solid ' + C.border + ';border-radius:9px;padding:7px 11px;font-size:12px">' +
+        '<span style="width:9px;height:9px;border-radius:50%;flex-shrink:0;background:' + (f.col || C.gold) + '"></span>' +
+        '<span style="color:' + C.dim + '">' + f.label + '</span>' +
+        '<b style="color:' + C.text + '">' + last[f.k] + (f.unit ? (" " + f.unit) : "") + '</b></div>';
+    });
     return '<div style="background:' + C.card + ';border:1px solid ' + C.border + ';border-radius:12px;padding:12px;margin-bottom:12px">' +
-      '<div style="font-size:11px;color:' + C.dim + ';margin-bottom:8px">Derni\u00e8re mesure scann\u00e9e \u00b7 ' + fmtDate(last.date || today()) + '</div>' +
+      '<div style="font-size:11px;color:' + C.dim + ';margin-bottom:9px;font-weight:700">Derni\u00e8res mesures \u00b7 ' + fmtDate(last.date || today()) + '</div>' +
       '<div style="display:flex;flex-wrap:wrap;gap:8px">' + chips.join("") + '</div></div>';
   }
 
