@@ -1004,6 +1004,29 @@ react-dom/cjs/react-dom-client.production.js:
       return all;
     }).catch(function () { return nativeMeasures(id); });
   }
+  /* ===================== Bouton contextuel "Bilan nutritionnel" sur l'onglet Nutrition v13 ===================== */
+  var nutBtn = null;
+  function refreshNutritionButton() {
+    var root = document.getElementById("root");
+    var txt = (root && root.textContent) || "";
+    var onNutrition = txt.indexOf("Glucides") > -1 && txt.indexOf("Lipides") > -1;
+    if (onNutrition) {
+      if (!nutBtn) {
+        nutBtn = document.createElement("button"); nutBtn.id = "exh-nutbtn";
+        nutBtn.style.cssText = "position:fixed;right:14px;bottom:14px;z-index:9001;background:" + C.gold + ";color:" + C.bg + ";border:none;border-radius:24px;padding:11px 16px;font:700 13px system-ui,-apple-system,sans-serif;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.45)";
+        nutBtn.textContent = "📋 Bilan nutritionnel";
+        nutBtn.onclick = function () {
+          var s = session(), id = null;
+          if (s && s.role === "client" && s.clientId) id = s.clientId;
+          else if (s && s.role === "coach") { var m = coachClients().filter(function (c) { return c.nom && txt.indexOf(c.nom) > -1; }); if (m.length === 1) id = m[0].id; }
+          if (id) openNutritionAudit(id);
+          else if (s && s.role === "coach") openCoach();
+        };
+        document.body.appendChild(nutBtn);
+      }
+    } else if (nutBtn) { nutBtn.remove(); nutBtn = null; }
+  }
+  setInterval(refreshNutritionButton, 1000);
 })();
 </script>
 </body></html>
