@@ -1034,6 +1034,21 @@ react-dom/cjs/react-dom-client.production.js:
     } else if (nutBtn) { nutBtn.remove(); nutBtn = null; }
   }
   setInterval(refreshNutritionButton, 1000);
+  /* ===================== Filet de sécurité : masquer le bandeau/nœud de ceinture sur la photo v15 ===================== */
+  function hideBeltDecor() {
+    var root = document.getElementById("root"); if (!root) return;
+    var ds = root.getElementsByTagName("div");
+    for (var i = 0; i < ds.length; i++) {
+      var el = ds[i]; if (el.getAttribute("data-exh-belt")) continue;
+      var st = el.style; if (!st) continue;
+      var tr = st.transform || "";
+      var bg = st.backgroundImage || st.background || "";
+      if (tr.indexOf("rotate(22deg)") > -1 || tr.indexOf("rotate(-16deg)") > -1 || bg.indexOf("linear-gradient(180deg") > -1) {
+        el.style.display = "none"; el.setAttribute("data-exh-belt", "1");
+      }
+    }
+  }
+  setInterval(hideBeltDecor, 800);
   /* ===================== Écran d'accueil façon iPhone (lanceur de sections) v14 ===================== */
   function targetClientId() {
     var s = session();
@@ -1130,6 +1145,10 @@ react-dom/cjs/react-dom-client.production.js:
       grid.appendChild(b);
     });
     box.appendChild(grid);
+    var ver = document.createElement("div");
+    ver.style.cssText = "text-align:center;font-size:11px;color:" + C.dim + ";margin-top:16px;opacity:.8";
+    ver.textContent = "Ex Home · interface v15 (29-06)";
+    box.appendChild(ver);
   }
 })();
 </script>
