@@ -295,267 +295,289 @@ react-dom/cjs/react-dom-client.production.js:
 </script>
 <script>
 /* =====================================================================
-   EX HOME — Couche "Historique & Anti-recul"  (v1)
-   ---------------------------------------------------------------------
-   Module AUTONOME ajouté APRÈS l'app. Il ne modifie aucune ligne du
-   React compilé : il lit/écrit uniquement les mêmes clés que l'app
-   utilise déjà, et une clé cloud DÉDIÉE "<id>-ergohist" qui n'entre
-   en collision avec rien.
-
-   Ce qu'il garantit :
-   1) ARCHIVAGE  : chaque journée passée est figée et conservée.
-   2) ANTI-RECUL : fusion convergente (on garde toujours la valeur la
-                   plus haute) — un 41 ne peut JAMAIS être écrasé par un 5,
-                   ni localement, ni au cloud. Les journées perdues du
-                   localStorage sont restaurées depuis le cloud.
-   3) HISTORIQUE COACH : bouton flottant (visible côté coach uniquement)
-                   ouvrant l'historique jour par jour de chaque cliente.
-   4) HISTORIQUE CLIENTE : la cliente conserve ses jours passés (durables),
-                   l'app continue de les afficher dans "Ma progression".
+   EX HOME — Couche "Suivi quotidien" (v4)  —  module AUTONOME
+   N'altère AUCUNE ligne du React compilé. Clés dédiées :
+     cloud "<id>-ergohist" "<id>-taskcount" "<id>-targets" "<id>-scans"
+     local exhome_ergohist_<id> exhome_taskcount_<id> exhome_targets_<id> exhome_scans_<id>
+   v4 ajoute : SCAN d'une mesure (Route A, sans serveur) —
+     import galerie OU caméra -> OCR navigateur (Tesseract) ->
+     extraction poids/masse grasse/calories/pas -> tu vérifies -> remonté.
    ===================================================================== */
 (function () {
   "use strict";
-
   var SB_URL = "https://tsvsoormwryatcouztrb.supabase.co";
   var SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRzdnNvb3Jtd3J5YXRjb3V6dHJiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI0NzEwMzMsImV4cCI6MjA5ODA0NzAzM30.IoquMyBUZE6QrEQdIJGgHF80QukJdG_Rqucfkvm0iy4";
   var REST = SB_URL + "/rest/v1/exhome_client_data";
   var H = { apikey: SB_KEY, Authorization: "Bearer " + SB_KEY, "Content-Type": "application/json" };
+  var TESS_URL = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
 
   function today() { return new Date().toISOString().split("T")[0]; }
   function isDate(d) { return /^\d{4}-\d{2}-\d{2}$/.test(d); }
   function rLS(k) { try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
   function wLS(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
-
-  /* ---------- Cloud (mêmes endpoint/clé/format que l'app) ---------- */
-  function cloudGet(cid) {
-    return fetch(REST + "?client_id=eq." + encodeURIComponent(cid) + "&select=payload,updated_at", { headers: H })
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (rows) {
-        if (rows && rows[0]) { try { return JSON.parse(rows[0].payload); } catch (e) { return null; } }
-        return null;
-      })
-      .catch(function () { return null; });
-  }
-  function cloudPut(cid, payload) {
-    return fetch(REST, {
-      method: "POST",
-      headers: { apikey: SB_KEY, Authorization: "Bearer " + SB_KEY, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" },
-      body: JSON.stringify({ client_id: cid, payload: JSON.stringify(payload), updated_at: new Date().toISOString() })
-    }).catch(function () {});
-  }
-
-  /* ---------- Lecture des données locales de l'app ---------- */
-  function localErgo(id) {
-    var raw = rLS("exhome_ergo_" + id) || {}, out = {};
-    Object.keys(raw).forEach(function (d) {
-      if (!isDate(d)) return;
-      var e = raw[d] || {};
-      out[d] = { squat: e.squat || 0, hinge: e.hinge || 0, fente: e.fente || 0, etages: e.etages || 0 };
-    });
-    return out;
-  }
-  function localChrono(id) {
-    var raw = rLS("exhome_chrono_" + id) || {}, out = {};
-    (raw.sessions || []).forEach(function (s) {
-      if (s && s.date) out[s.date] = (out[s.date] || 0) + (s.dur || 0);
-    });
-    return out;
-  }
-
-  /* ---------- Fusion convergente : on ne descend JAMAIS (anti-recul) ---------- */
-  function mergeErgo(a, b) {
-    var out = {}, dates = {};
-    [a, b].forEach(function (o) { if (o) Object.keys(o).forEach(function (d) { dates[d] = 1; }); });
-    Object.keys(dates).forEach(function (d) {
-      var x = (a && a[d]) || {}, y = (b && b[d]) || {};
-      out[d] = {
-        squat: Math.max(x.squat || 0, y.squat || 0),
-        hinge: Math.max(x.hinge || 0, y.hinge || 0),
-        fente: Math.max(x.fente || 0, y.fente || 0),
-        etages: Math.max(x.etages || 0, y.etages || 0)
-      };
-    });
-    return out;
-  }
-  function mergeChrono(a, b) {
-    var out = {}, dates = {};
-    [a, b].forEach(function (o) { if (o) Object.keys(o).forEach(function (d) { dates[d] = 1; }); });
-    Object.keys(dates).forEach(function (d) { out[d] = Math.max((a && a[d]) || 0, (b && b[d]) || 0); });
-    return out;
-  }
-
-  /* ---------- Restauration des jours PASSÉS dans le localStorage ----------
-     (on ne touche JAMAIS au jour courant pour ne pas gêner les compteurs
-      actifs gérés par l'app ; le jour courant guérit au prochain chargement) */
-  function restorePast(id, archErgo) {
-    var raw = rLS("exhome_ergo_" + id) || {}, t = today(), changed = false;
-    Object.keys(archErgo).forEach(function (d) {
-      if (d === t) return;
-      var a = archErgo[d], cur = raw[d];
-      if (!cur) { raw[d] = { squat: a.squat, hinge: a.hinge, fente: a.fente, etages: a.etages, log: [] }; changed = true; return; }
-      ["squat", "hinge", "fente", "etages"].forEach(function (m) {
-        if ((cur[m] || 0) < (a[m] || 0)) { cur[m] = a[m]; changed = true; }
-      });
-    });
-    if (changed) wLS("exhome_ergo_" + id, raw);
-  }
-
-  /* ---------- Synchronisation d'une cliente (appelée côté cliente) ---------- */
-  function syncClient(id) {
-    if (!id) return Promise.resolve();
-    var lE = localErgo(id), lC = localChrono(id);
-    return cloudGet(id + "-ergohist").then(function (remote) {
-      remote = remote || {};
-      var mE = mergeErgo(remote.ergo, lE);
-      var mC = mergeChrono(remote.chrono, lC);
-      restorePast(id, mE);
-      var payload = { ergo: mE, chrono: mC, updatedAt: new Date().toISOString() };
-      wLS("exhome_ergohist_" + id, payload);
-      return cloudPut(id + "-ergohist", payload);
-    }).catch(function () {});
-  }
-
-  function session() { try { return JSON.parse(sessionStorage.getItem("exhome_session")) || null; } catch (e) { return null; } }
-
-  /* ---------- Boucle : au chargement, périodique, + bascule de minuit ---------- */
-  function tick() {
-    var s = session();
-    if (s && s.role === "client" && s.clientId) syncClient(s.clientId);
-  }
-  var lastDay = today();
-  function midnightWatch() {
-    var t = today();
-    if (t !== lastDay) { lastDay = t; tick(); }   // journée figée à la bascule de date
-  }
-  window.addEventListener("load", function () { setTimeout(tick, 4000); });
-  setInterval(tick, 60000);          // re-sync toutes les minutes
-  setInterval(midnightWatch, 30000); // détecte le passage à un nouveau jour
-
-  /* =====================================================================
-     HISTORIQUE CÔTÉ COACH — bouton flottant + panneau (coach uniquement)
-     ===================================================================== */
-  var C = { bg: "#0F2820", surf: "#163428", card: "#1B4D3E", gold: "#C9A84C", text: "#F5F0E8", dim: "#5A8A68", border: "#1E4A38" };
-
-  function fmtTime(sec) {
-    var h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
-    return h > 0 ? (h + "h" + String(m).padStart(2, "0")) : (String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0"));
-  }
   function fmtDate(d) { var p = d.split("-"); return p[2] + "/" + p[1] + "/" + p[0]; }
+  function fmtTime(s) { var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60; return h > 0 ? (h + "h" + String(m).padStart(2, "0")) : (String(m).padStart(2, "0") + ":" + String(x).padStart(2, "0")); }
+  function num(v) { var n = parseInt(v, 10); return isNaN(n) || n < 0 ? 0 : n; }
 
-  function coachClients() {
-    var st = rLS("exhome_v5"); var arr = (st && st.clients) || [];
-    return Array.isArray(arr) ? arr.map(function (c) { return { id: c.id, nom: c.nom }; }).filter(function (c) { return c.id; }) : [];
+  function cloudGet(cid) { return fetch(REST + "?client_id=eq." + encodeURIComponent(cid) + "&select=payload,updated_at", { headers: H }).then(function (r) { return r.ok ? r.json() : null; }).then(function (rows) { if (rows && rows[0]) { try { return JSON.parse(rows[0].payload); } catch (e) { return null; } } return null; }).catch(function () { return null; }); }
+  function cloudPut(cid, payload) { return fetch(REST, { method: "POST", headers: { apikey: SB_KEY, Authorization: "Bearer " + SB_KEY, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify({ client_id: cid, payload: JSON.stringify(payload), updated_at: new Date().toISOString() }) }).catch(function () {}); }
+  function session() { try { return JSON.parse(sessionStorage.getItem("exhome_session")) || null; } catch (e) { return null; } }
+  function findClient(id) { var st = rLS("exhome_v5"); var a = (st && st.clients) || []; if (!Array.isArray(a)) return null; for (var i = 0; i < a.length; i++) if (a[i].id === id) return a[i]; return null; }
+  function coachClients() { var st = rLS("exhome_v5"); var a = (st && st.clients) || []; return Array.isArray(a) ? a.filter(function (c) { return c && c.id; }) : []; }
+
+  /* ===== ERGO archive + anti-recul ===== */
+  function localErgo(id) { var raw = rLS("exhome_ergo_" + id) || {}, out = {}; Object.keys(raw).forEach(function (d) { if (!isDate(d)) return; var e = raw[d] || {}; out[d] = { squat: e.squat || 0, hinge: e.hinge || 0, fente: e.fente || 0, etages: e.etages || 0 }; }); return out; }
+  function localChrono(id) { var raw = rLS("exhome_chrono_" + id) || {}, out = {}; (raw.sessions || []).forEach(function (s) { if (s && s.date) out[s.date] = (out[s.date] || 0) + (s.dur || 0); }); return out; }
+  function mergeErgo(a, b) { var out = {}, ds = {}; [a, b].forEach(function (o) { if (o) Object.keys(o).forEach(function (d) { ds[d] = 1; }); }); Object.keys(ds).forEach(function (d) { var x = (a && a[d]) || {}, y = (b && b[d]) || {}; out[d] = { squat: Math.max(x.squat || 0, y.squat || 0), hinge: Math.max(x.hinge || 0, y.hinge || 0), fente: Math.max(x.fente || 0, y.fente || 0), etages: Math.max(x.etages || 0, y.etages || 0) }; }); return out; }
+  function mergeChrono(a, b) { var out = {}, ds = {}; [a, b].forEach(function (o) { if (o) Object.keys(o).forEach(function (d) { ds[d] = 1; }); }); Object.keys(ds).forEach(function (d) { out[d] = Math.max((a && a[d]) || 0, (b && b[d]) || 0); }); return out; }
+  function restorePast(id, arch) { var raw = rLS("exhome_ergo_" + id) || {}, t = today(), ch = false; Object.keys(arch).forEach(function (d) { if (d === t) return; var a = arch[d], cur = raw[d]; if (!cur) { raw[d] = { squat: a.squat, hinge: a.hinge, fente: a.fente, etages: a.etages, log: [] }; ch = true; return; } ["squat", "hinge", "fente", "etages"].forEach(function (m) { if ((cur[m] || 0) < (a[m] || 0)) { cur[m] = a[m]; ch = true; } }); }); if (ch) wLS("exhome_ergo_" + id, raw); }
+  function syncErgo(id) { if (!id) return Promise.resolve(); var lE = localErgo(id), lC = localChrono(id); return cloudGet(id + "-ergohist").then(function (r) { r = r || {}; var mE = mergeErgo(r.ergo, lE), mC = mergeChrono(r.chrono, lC); restorePast(id, mE); var p = { ergo: mE, chrono: mC, updatedAt: new Date().toISOString() }; wLS("exhome_ergohist_" + id, p); return cloudPut(id + "-ergohist", p); }).catch(function () {}); }
+  function todayRam(id) { var d = (rLS("exhome_ergo_" + id) || {})[today()] || {}; return (d.squat || 0) + (d.hinge || 0) + (d.fente || 0); }
+
+  /* ===== Compteur de tâches ===== */
+  function localTasks(id) { return rLS("exhome_taskcount_" + id) || {}; }
+  function saveTasks(id, o) { wLS("exhome_taskcount_" + id, o); }
+  function mergeTasksFill(remote, local) { var out = {}; [remote, local].forEach(function (o) { if (o) Object.keys(o).forEach(function (d) { out[d] = out[d] || {}; var s = o[d] || {}; Object.keys(s).forEach(function (t) { out[d][t] = s[t]; }); }); }); return out; }
+  var taskTimers = {};
+  function pushTasks(id) { var local = localTasks(id); cloudGet(id + "-taskcount").then(function (r) { var remote = (r && r.days) || {}; var merged = mergeTasksFill(remote, local); saveTasks(id, merged); cloudPut(id + "-taskcount", { days: merged, updatedAt: new Date().toISOString() }); }).catch(function () {}); }
+  function scheduleTaskPush(id) { clearTimeout(taskTimers[id]); taskTimers[id] = setTimeout(function () { pushTasks(id); }, 1500); }
+  function bumpTask(id, taskId, delta) { var t = today(), o = localTasks(id); o[t] = o[t] || {}; o[t][taskId] = Math.max(0, (o[t][taskId] || 0) + delta); saveTasks(id, o); scheduleTaskPush(id); return o[t][taskId]; }
+  function syncTasks(id) { if (!id) return Promise.resolve(); var local = localTasks(id); return cloudGet(id + "-taskcount").then(function (r) { var remote = (r && r.days) || {}; var merged = mergeTasksFill(remote, local); saveTasks(id, merged); return cloudPut(id + "-taskcount", { days: merged, updatedAt: new Date().toISOString() }); }).catch(function () {}); }
+
+  /* ===== Valeurs de référence (coach, manuelles) ===== */
+  function setTargets(id, t) { var v = { ram: num(t.ram), basale: num(t.basale), updatedAt: new Date().toISOString() }; wLS("exhome_targets_" + id, v); return cloudPut(id + "-targets", v); }
+  function loadTargets(id) { return cloudGet(id + "-targets").then(function (r) { var t = r ? { ram: num(r.ram), basale: num(r.basale) } : (rLS("exhome_targets_" + id) || { ram: 0, basale: 0 }); if (r) wLS("exhome_targets_" + id, t); return t; }).catch(function () { return rLS("exhome_targets_" + id) || { ram: 0, basale: 0 }; }); }
+
+  /* ===== Mesures scannées (Route A) ===== */
+  function localScans(id) { var o = rLS("exhome_scans_" + id) || { measures: [] }; o.measures = o.measures || []; return o; }
+  function addScan(id, mes) {
+    var o = localScans(id);
+    o.measures.push(Object.assign({ date: today(), ts: Date.now(), source: "scan" }, mes));
+    wLS("exhome_scans_" + id, o);
+    return cloudGet(id + "-scans").then(function (r) {
+      var remote = (r && r.measures) || [], byTs = {};
+      remote.concat(o.measures).forEach(function (x) { if (x && x.ts) byTs[x.ts] = x; });
+      var merged = Object.keys(byTs).map(function (k) { return byTs[k]; }).sort(function (a, b) { return a.ts - b.ts; });
+      var payload = { measures: merged, updatedAt: new Date().toISOString() };
+      wLS("exhome_scans_" + id, payload); cloudPut(id + "-scans", payload); return payload;
+    }).catch(function () { return o; });
   }
+  function loadScans(id) { return cloudGet(id + "-scans").then(function (r) { var m = (r && r.measures) || (localScans(id).measures || []); if (r) wLS("exhome_scans_" + id, { measures: m, updatedAt: new Date().toISOString() }); return m; }).catch(function () { return localScans(id).measures || []; }); }
 
-  function buildButton() {
-    if (document.getElementById("exh-hist-btn")) return;
-    var b = document.createElement("button");
-    b.id = "exh-hist-btn";
-    b.textContent = "📊 Historique ergo";
-    b.style.cssText = "position:fixed;left:14px;bottom:14px;z-index:9000;background:" + C.card +
-      ";color:" + C.gold + ";border:1.5px solid " + C.gold + "66;border-radius:24px;padding:10px 16px;" +
-      "font:600 13px system-ui,-apple-system,sans-serif;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.45)";
-    b.onclick = openPanel;
-    document.body.appendChild(b);
-  }
-
-  function openPanel() {
-    var old = document.getElementById("exh-hist-ov"); if (old) old.remove();
-    var ov = document.createElement("div");
-    ov.id = "exh-hist-ov";
-    ov.style.cssText = "position:fixed;inset:0;z-index:99990;background:rgba(8,20,15,.86);display:flex;" +
-      "align-items:center;justify-content:center;padding:16px;font:14px system-ui,-apple-system,sans-serif";
-    var box = document.createElement("div");
-    box.style.cssText = "background:" + C.bg + ";border:1.5px solid " + C.gold + "55;border-radius:16px;" +
-      "width:100%;max-width:680px;max-height:88vh;overflow:auto;padding:18px;color:" + C.text;
-    ov.appendChild(box);
-    ov.addEventListener("click", function (e) { if (e.target === ov) ov.remove(); });
-
-    var clients = coachClients();
-    var head = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">' +
-      '<div style="font-weight:800;color:' + C.gold + ';font-size:16px">📊 Historique ergo — jour par jour</div>' +
-      '<button id="exh-x" style="background:none;border:none;color:' + C.dim + ';font-size:22px;cursor:pointer">×</button></div>';
-    var picker = '<label style="font-size:11px;color:' + C.dim + ';text-transform:uppercase;letter-spacing:.06em">Cliente</label>' +
-      '<select id="exh-sel" style="width:100%;margin:6px 0 14px;padding:10px 12px;border-radius:10px;background:' + C.surf +
-      ';color:' + C.text + ';border:1px solid ' + C.border + ';font:inherit">' +
-      '<option value="">— Choisir une cliente —</option>' +
-      clients.map(function (c) { return '<option value="' + c.id + '">' + (c.nom || c.id) + '</option>'; }).join("") +
-      '</select>';
-    box.innerHTML = head + picker + '<div id="exh-body" style="color:' + C.dim + ';font-size:13px">Sélectionnez une cliente pour afficher son historique.</div>';
-    box.querySelector("#exh-x").onclick = function () { ov.remove(); };
-    box.querySelector("#exh-sel").onchange = function () { renderHistory(this.value, box.querySelector("#exh-body")); };
-    document.body.appendChild(ov);
-  }
-
-  function renderHistory(id, target) {
-    if (!id) { target.innerHTML = "Sélectionnez une cliente."; return; }
-    target.innerHTML = '<div style="padding:18px 0;color:' + C.dim + '">Chargement…</div>';
-    Promise.all([cloudGet(id + "-ergohist"), cloudGet(id + "-ergolive")]).then(function (res) {
-      var hist = res[0] || {}, live = res[1] || {};
-      var ergo = Object.assign({}, hist.ergo || {});
-      var chrono = Object.assign({}, hist.chrono || {});
-      // Intègre le jour courant depuis le snapshot live (s'il existe)
-      var lv = live.ergoLive, cv = live.chronoLive;
-      if (lv && lv.date) {
-        var prev = ergo[lv.date] || {};
-        ergo[lv.date] = {
-          squat: Math.max(prev.squat || 0, lv.squat || 0),
-          hinge: Math.max(prev.hinge || 0, lv.hinge || 0),
-          fente: Math.max(prev.fente || 0, lv.fente || 0),
-          etages: Math.max(prev.etages || 0, lv.etages || 0)
-        };
-      }
-      if (cv && cv.date) chrono[cv.date] = Math.max(chrono[cv.date] || 0, cv.base || 0);
-
-      var dates = Object.keys(ergo).filter(isDate).sort().reverse();
-      if (!dates.length) { target.innerHTML = '<div style="padding:20px;text-align:center;color:' + C.dim + '">Aucune donnée ergo enregistrée pour cette cliente.</div>'; return; }
-
-      var t = today();
-      var rows = dates.map(function (d) {
-        var e = ergo[d], ram = (e.squat || 0) + (e.hinge || 0) + (e.fente || 0);
-        var ch = chrono[d] ? fmtTime(chrono[d]) : "—";
-        var hl = d === t;
-        return '<tr style="' + (hl ? "background:" + C.gold + "14;" : "") + 'border-bottom:1px solid ' + C.border + '">' +
-          '<td style="padding:7px 8px;font-weight:' + (hl ? 700 : 400) + ';color:' + (hl ? C.gold : C.text) + '">' + fmtDate(d) + (hl ? " • auj." : "") + '</td>' +
-          '<td style="padding:7px 8px;text-align:center;font-weight:700;color:' + C.gold + '">' + ram + '</td>' +
-          '<td style="padding:7px 8px;text-align:center">' + (e.squat || 0) + '</td>' +
-          '<td style="padding:7px 8px;text-align:center">' + (e.hinge || 0) + '</td>' +
-          '<td style="padding:7px 8px;text-align:center">' + (e.fente || 0) + '</td>' +
-          '<td style="padding:7px 8px;text-align:center">' + (e.etages || 0) + '</td>' +
-          '<td style="padding:7px 8px;text-align:center;color:' + C.dim + '">' + ch + '</td></tr>';
-      }).join("");
-
-      var totRam = dates.reduce(function (s, d) { var e = ergo[d]; return s + (e.squat || 0) + (e.hinge || 0) + (e.fente || 0); }, 0);
-      var totEt = dates.reduce(function (s, d) { return s + (ergo[d].etages || 0); }, 0);
-      var jActifs = dates.filter(function (d) { var e = ergo[d]; return (e.squat || 0) + (e.hinge || 0) + (e.fente || 0) + (e.etages || 0) > 0; }).length;
-
-      target.innerHTML =
-        '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">' +
-          stat(jActifs, "jours actifs") + stat(totRam, "ramassages") + stat(totEt, "étages") +
-        '</div>' +
-        '<div style="overflow:auto;border:1px solid ' + C.border + ';border-radius:10px">' +
-        '<table style="width:100%;border-collapse:collapse;font-size:12px">' +
-        '<thead><tr style="background:' + C.surf + ';color:' + C.dim + '">' +
-        ['Date', 'Ramass.', '🧍 Squat', '🔄 Hinge', '🏃 Fente', '🪜 Étages', '⏱ Chrono']
-          .map(function (h) { return '<th style="padding:8px;text-align:' + (h === 'Date' ? 'left' : 'center') + ';font-weight:700;white-space:nowrap">' + h + '</th>'; }).join("") +
-        '</tr></thead><tbody>' + rows + '</tbody></table></div>' +
-        '<div style="font-size:10px;color:' + C.dim + ';margin-top:8px">Données figées et fusionnées en valeur maximale (anti-recul). 1 ramassage ≈ 8 s de mouvement actif.</div>';
-    }).catch(function () {
-      target.innerHTML = '<div style="padding:20px;text-align:center;color:#E07060">Impossible de charger l\'historique (réseau).</div>';
+  function ensureTesseract() {
+    return new Promise(function (res, rej) {
+      if (window.Tesseract) return res(window.Tesseract);
+      var s = document.createElement("script"); s.src = TESS_URL;
+      s.onload = function () { window.Tesseract ? res(window.Tesseract) : rej(new Error("tess")); };
+      s.onerror = function () { rej(new Error("cdn")); };
+      document.head.appendChild(s);
     });
   }
-  function stat(v, l) {
-    return '<div style="background:' + C.card + ';border:1px solid ' + C.border + ';border-radius:10px;padding:10px;text-align:center">' +
-      '<div style="font-size:20px;font-weight:800;color:' + C.gold + '">' + v + '</div>' +
-      '<div style="font-size:9px;color:' + C.dim + ';text-transform:uppercase;letter-spacing:.05em">' + l + '</div></div>';
+  function parseMeasures(text) {
+    var t = (text || "").replace(/,/g, ".");
+    function g(re) { var x = t.match(re); return x ? x[1] : ""; }
+    return {
+      poids: g(/(\d{2,3}(?:\.\d)?)\s*kg/i),
+      graisse: g(/(\d{1,2}(?:\.\d)?)\s*%/),
+      calories: g(/(\d{3,4})\s*k?cal/i),
+      pas: g(/(\d{3,6})\s*(?:pas|steps?|step)/i)
+    };
   }
 
-  /* Affiche le bouton coach quand une session coach est active (revérifie périodiquement) */
+  /* ===== Boucles + reset quotidien ===== */
+  function tick() { var s = session(); if (!s) return; if (s.role === "client" && s.clientId) { syncErgo(s.clientId); syncTasks(s.clientId); } }
+  window.addEventListener("load", function () { setTimeout(tick, 4000); });
+  setInterval(tick, 60000);
+  var seenDay = today(), pendingReload = false;
+  function dayWatch() { var t = today(); if (t !== seenDay) { if (document.hidden) location.reload(); else pendingReload = true; } }
+  document.addEventListener("visibilitychange", function () { if (document.visibilityState === "visible") { if (today() !== seenDay || pendingReload) location.reload(); } });
+  setInterval(dayWatch, 30000);
+
+  /* ===== UI ===== */
+  var C = { bg: "#0F2820", surf: "#163428", card: "#1B4D3E", gold: "#C9A84C", text: "#F5F0E8", dim: "#5A8A68", border: "#1E4A38", ok: "#6FCF97" };
+  var CAT = { posture: "🧍", mobilite: "🌀", force: "💪", respiration: "🌬️", menager: "🏠" };
+  function btnStyle() { return "position:fixed;left:14px;bottom:14px;z-index:9000;background:" + C.card + ";color:" + C.gold + ";border:1.5px solid " + C.gold + "66;border-radius:24px;padding:10px 16px;font:600 13px system-ui,-apple-system,sans-serif;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.45)"; }
+  function overlay() { var old = document.getElementById("exh-ov"); if (old) old.remove(); var ov = document.createElement("div"); ov.id = "exh-ov"; ov.style.cssText = "position:fixed;inset:0;z-index:99990;background:rgba(8,20,15,.86);display:flex;align-items:center;justify-content:center;padding:16px;font:14px system-ui,-apple-system,sans-serif"; var box = document.createElement("div"); box.style.cssText = "background:" + C.bg + ";border:1.5px solid " + C.gold + "55;border-radius:16px;width:100%;max-width:680px;max-height:88vh;overflow:auto;padding:18px;color:" + C.text; ov.appendChild(box); ov.addEventListener("click", function (e) { if (e.target === ov) ov.remove(); }); document.body.appendChild(ov); return box; }
+  function header(box, title) { var h = document.createElement("div"); h.style.cssText = "display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"; h.innerHTML = '<div style="font-weight:800;color:' + C.gold + ';font-size:16px">' + title + '</div>'; var x = document.createElement("button"); x.textContent = "×"; x.style.cssText = "background:none;border:none;color:" + C.dim + ";font-size:24px;cursor:pointer;line-height:1"; x.onclick = function () { var o = document.getElementById("exh-ov"); if (o) o.remove(); }; h.appendChild(x); box.appendChild(h); }
+  function bar(pct, col) { return '<div style="height:7px;background:' + C.border + ';border-radius:4px;overflow:hidden"><div style="height:100%;width:' + Math.min(100, pct) + '%;background:' + col + ';border-radius:4px"></div></div>'; }
+  function chip(label, val, unit) { return '<div style="background:' + C.surf + ';border:1px solid ' + C.border + ';border-radius:8px;padding:6px 10px;font-size:12px"><span style="color:' + C.dim + '">' + label + ' </span><b style="color:' + C.gold + '">' + val + (unit ? (" " + unit) : "") + '</b></div>'; }
+
+  /* ---------- SCAN (Route A) ---------- */
+  function openScan(clientId) {
+    var box = overlay(); header(box, "📷 Scanner une mesure");
+    var intro = document.createElement("div"); intro.style.cssText = "font-size:12px;color:" + C.dim + ";margin-bottom:12px";
+    intro.textContent = "Importe une capture d'écran nette (balance, Apple Santé, étiquette…) ou prends une photo. Les chiffres sont lus automatiquement — tu vérifies, puis tu valides.";
+    box.appendChild(intro);
+
+    var fileGal = document.createElement("input"); fileGal.type = "file"; fileGal.accept = "image/*"; fileGal.style.display = "none";
+    var fileCam = document.createElement("input"); fileCam.type = "file"; fileCam.accept = "image/*"; fileCam.setAttribute("capture", "environment"); fileCam.style.display = "none";
+    box.appendChild(fileGal); box.appendChild(fileCam);
+
+    var btns = document.createElement("div"); btns.style.cssText = "display:flex;gap:10px;margin-bottom:12px";
+    var bImp = document.createElement("button"); bImp.textContent = "🖼️ Importer une photo"; bImp.style.cssText = "flex:1;padding:12px;border:1.5px solid " + C.gold + "66;border-radius:12px;background:" + C.card + ";color:" + C.gold + ";font-weight:700;cursor:pointer";
+    var bCam = document.createElement("button"); bCam.textContent = "📷 Prendre une photo"; bCam.style.cssText = "flex:1;padding:12px;border:1px solid " + C.border + ";border-radius:12px;background:transparent;color:" + C.text + ";font-weight:600;cursor:pointer";
+    bImp.onclick = function () { fileGal.click(); }; bCam.onclick = function () { fileCam.click(); };
+    btns.appendChild(bImp); btns.appendChild(bCam); box.appendChild(btns);
+
+    var preview = document.createElement("img"); preview.style.cssText = "display:none;max-width:100%;max-height:180px;border-radius:10px;margin-bottom:10px;border:1px solid " + C.border;
+    box.appendChild(preview);
+    var status = document.createElement("div"); status.style.cssText = "font-size:12px;color:" + C.dim + ";margin-bottom:10px"; box.appendChild(status);
+    var form = document.createElement("div"); form.style.display = "none"; box.appendChild(form);
+
+    function handle(file) {
+      if (!file) return;
+      var url = URL.createObjectURL(file); preview.src = url; preview.style.display = "block";
+      form.style.display = "none"; status.textContent = "Chargement du lecteur…";
+      ensureTesseract().then(function (T) {
+        status.textContent = "Analyse de l'image… 0%";
+        return T.recognize(file, "eng", { logger: function (m) { if (m.status === "recognizing text") status.textContent = "Analyse de l'image… " + Math.round(m.progress * 100) + "%"; } });
+      }).then(function (res) {
+        var text = res.data.text || ""; var guess = parseMeasures(text);
+        status.textContent = "✓ Analyse terminée — vérifie les valeurs ci-dessous.";
+        showForm(guess, text);
+      }).catch(function () { status.innerHTML = '<span style="color:#E07060">Lecture impossible (connexion requise pour le scan). Tu peux saisir les valeurs à la main ci-dessous.</span>'; showForm({}, ""); });
+    }
+    fileGal.onchange = function () { handle(this.files[0]); };
+    fileCam.onchange = function () { handle(this.files[0]); };
+
+    function field(label, id, val, unit) {
+      return '<div style="flex:1;min-width:120px"><label style="font-size:10px;color:' + C.dim + ';display:block;margin-bottom:4px">' + label + (unit ? (" (" + unit + ")") : "") + '</label>' +
+        '<input id="' + id + '" inputmode="decimal" value="' + (val || "") + '" style="width:100%;box-sizing:border-box;padding:9px 10px;border-radius:8px;border:1px solid ' + C.border + ';background:' + C.surf + ';color:' + C.text + ';font:inherit"></div>';
+    }
+    function showForm(g, raw) {
+      form.style.display = "block";
+      form.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px">' +
+        field("Poids", "exh-p", g.poids, "kg") + field("Masse grasse", "exh-g", g.graisse, "%") +
+        field("Calories", "exh-c", g.calories, "kcal") + field("Pas", "exh-pas", g.pas, "") + '</div>' +
+        (raw ? '<details style="margin-bottom:12px"><summary style="font-size:11px;color:' + C.dim + ';cursor:pointer">Voir le texte lu</summary><pre style="white-space:pre-wrap;font-size:10px;color:' + C.dim + ';background:' + C.surf + ';border-radius:8px;padding:8px;max-height:120px;overflow:auto">' + raw.replace(/</g, "&lt;") + '</pre></details>' : '') +
+        '<button id="exh-scan-save" style="width:100%;padding:12px;border:none;border-radius:10px;background:' + C.ok + ';color:#fff;font-weight:800;cursor:pointer">Enregistrer la mesure</button>' +
+        '<div id="exh-scan-ok" style="text-align:center;font-size:12px;color:' + C.ok + ';margin-top:8px;height:16px"></div>';
+      form.querySelector("#exh-scan-save").onclick = function () {
+        var mes = {};
+        var p = form.querySelector("#exh-p").value, gr = form.querySelector("#exh-g").value, ca = form.querySelector("#exh-c").value, pa = form.querySelector("#exh-pas").value;
+        if (p) mes.poids = parseFloat(p.replace(",", "."));
+        if (gr) mes.graisse = parseFloat(gr.replace(",", "."));
+        if (ca) mes.calories = parseInt(ca, 10);
+        if (pa) mes.pas = parseInt(pa, 10);
+        if (!Object.keys(mes).length) { form.querySelector("#exh-scan-ok").innerHTML = '<span style="color:#E07060">Renseigne au moins une valeur.</span>'; return; }
+        addScan(clientId, mes).then(function () { form.querySelector("#exh-scan-ok").textContent = "✓ Mesure enregistrée et synchronisée"; });
+      };
+    }
+  }
+
+  function measuresCard(measures) {
+    if (!measures || !measures.length) return "";
+    var last = measures[measures.length - 1];
+    var chips = [];
+    if (last.poids != null) chips.push(chip("⚖️", last.poids, "kg"));
+    if (last.graisse != null) chips.push(chip("🫀", last.graisse, "%"));
+    if (last.calories != null) chips.push(chip("🔥", last.calories, "kcal"));
+    if (last.pas != null) chips.push(chip("👣", last.pas, ""));
+    if (!chips.length) return "";
+    return '<div style="background:' + C.card + ';border:1px solid ' + C.border + ';border-radius:12px;padding:12px;margin-bottom:12px">' +
+      '<div style="font-size:11px;color:' + C.dim + ';margin-bottom:8px">Dernière mesure scannée · ' + fmtDate(last.date || today()) + '</div>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:8px">' + chips.join("") + '</div></div>';
+  }
+
+  /* ---------- CLIENTE ---------- */
+  function openTasks(clientId) {
+    var box = overlay(); header(box, "🧮 Mon suivi du jour");
+    var top = document.createElement("div"); box.appendChild(top);
+    top.innerHTML = '<div style="color:' + C.dim + ';font-size:12px;margin-bottom:12px">Chargement…</div>';
+    Promise.all([loadTargets(clientId), loadScans(clientId)]).then(function (res) {
+      var t = res[0] || { ram: 0, basale: 0 }, measures = res[1] || [];
+      var ram = todayRam(clientId), html = "";
+      if (t.ram > 0) { var pct = Math.round(ram / t.ram * 100); html += '<div style="background:' + C.card + ';border:1px solid ' + C.border + ';border-radius:12px;padding:12px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px"><span>🎯 Objectif ramassages du jour</span><span style="color:' + (ram >= t.ram ? C.ok : C.gold) + ';font-weight:700">' + ram + ' / ' + t.ram + '</span></div>' + bar(pct, ram >= t.ram ? C.ok : C.gold) + '<div style="font-size:10px;color:' + C.dim + ';margin-top:5px">Fixé par ton coach</div></div>'; }
+      if (t.basale > 0) html += '<div style="background:' + C.card + ';border:1px solid ' + C.border + ';border-radius:12px;padding:12px;margin-bottom:8px"><div style="font-size:12px">🔥 Calories nécessaires / jour (basale)</div><div style="font-size:22px;font-weight:800;color:' + C.gold + '">' + t.basale + ' <span style="font-size:12px;color:' + C.dim + '">kcal</span></div><div style="font-size:10px;color:' + C.dim + '">Fixé par ton coach</div></div>';
+      html += measuresCard(measures);
+      top.innerHTML = html;
+      var scanBtn = document.createElement("button"); scanBtn.textContent = "📷 Scanner une mesure (poids, masse grasse…)";
+      scanBtn.style.cssText = "width:100%;padding:11px;margin-bottom:14px;border:1.5px solid " + C.gold + "66;border-radius:12px;background:" + C.card + ";color:" + C.gold + ";font-weight:700;cursor:pointer";
+      scanBtn.onclick = function () { openScan(clientId); };
+      top.appendChild(scanBtn);
+      renderTaskList(box, clientId);
+    }).catch(function () { top.innerHTML = ""; renderTaskList(box, clientId); });
+  }
+  function renderTaskList(box, clientId) {
+    var prog = (findClient(clientId) || {}).programme || [];
+    var counts = (localTasks(clientId) || {})[today()] || {};
+    var title = document.createElement("div"); title.style.cssText = "font-size:11px;color:" + C.dim + ";text-transform:uppercase;letter-spacing:.06em;margin:2px 0 10px"; title.textContent = "Mes tâches — appuie sur + à chaque fois"; box.appendChild(title);
+    if (!prog.length) { var d = document.createElement("div"); d.style.cssText = "color:" + C.dim + ";font-size:13px"; d.textContent = "Aucune tâche dans ton programme."; box.appendChild(d); return; }
+    prog.forEach(function (ex) {
+      var row = document.createElement("div"); row.style.cssText = "display:flex;align-items:center;gap:10px;padding:11px;margin-bottom:9px;background:" + C.card + ";border:1px solid " + C.border + ";border-radius:12px";
+      var n = counts[ex.id] || 0;
+      var label = document.createElement("div"); label.style.cssText = "flex:1;min-width:0";
+      label.innerHTML = '<div style="font-size:13px">' + (CAT[ex.categorie] || "•") + ' ' + (ex.titre || "Tâche") + '</div><div class="exh-cnt" style="font-size:11px;color:' + (n > 0 ? C.ok : C.dim) + ';margin-top:2px">' + (n > 0 ? ("✓ fait " + n + " fois aujourd'hui") : "pas encore fait") + '</div>';
+      var minus = document.createElement("button"); minus.textContent = "−"; minus.style.cssText = "width:36px;height:36px;border-radius:10px;border:1px solid " + C.border + ";background:transparent;color:" + C.dim + ";font-size:18px;cursor:pointer;flex-shrink:0";
+      var numEl = document.createElement("div"); numEl.textContent = n; numEl.style.cssText = "min-width:26px;text-align:center;font-size:18px;font-weight:800;color:" + C.gold;
+      var plus = document.createElement("button"); plus.textContent = "+"; plus.style.cssText = "width:40px;height:40px;border-radius:12px;border:none;background:" + C.ok + ";color:#fff;font-size:22px;font-weight:800;cursor:pointer;flex-shrink:0;box-shadow:0 2px 8px " + C.ok + "55";
+      function refresh(v) { numEl.textContent = v; var c = label.querySelector(".exh-cnt"); c.textContent = v > 0 ? ("✓ fait " + v + " fois aujourd'hui") : "pas encore fait"; c.style.color = v > 0 ? C.ok : C.dim; }
+      plus.onclick = function () { refresh(bumpTask(clientId, ex.id, 1)); }; minus.onclick = function () { refresh(bumpTask(clientId, ex.id, -1)); };
+      row.appendChild(label); row.appendChild(minus); row.appendChild(numEl); row.appendChild(plus); box.appendChild(row);
+    });
+  }
+
+  /* ---------- COACH ---------- */
+  function buildToday() {
+    var clients = coachClients();
+    return Promise.all(clients.map(function (c) {
+      return Promise.all([cloudGet(c.id + "-ergolive"), cloudGet(c.id + "-taskcount"), cloudGet(c.id + "-targets")]).then(function (res) {
+        var live = res[0] || {}, tc = res[1] || {}, tg = res[2] || {}, t = today();
+        var lv = live.ergoLive && live.ergoLive.date === t ? live.ergoLive : null, cv = live.chronoLive && live.chronoLive.date === t ? live.chronoLive : null;
+        var ram = lv ? (lv.squat || 0) + (lv.hinge || 0) + (lv.fente || 0) : 0, etg = lv ? (lv.etages || 0) : 0, chr = cv ? (cv.base || 0) : 0;
+        var taskDay = (tc.days || {})[t] || {}, taskTot = Object.keys(taskDay).reduce(function (s, k) { return s + (taskDay[k] || 0); }, 0);
+        var prog = c.programme || [], taskDetail = Object.keys(taskDay).map(function (tid) { var ex = prog.filter(function (p) { return p.id === tid; })[0]; return { titre: ex ? ex.titre : "Tâche", n: taskDay[tid] }; }).filter(function (x) { return x.n > 0; });
+        var objs = c.petitsObjectifs || [], objDone = objs.filter(function (o) { return (o.validations || []).indexOf(t) > -1; }).length;
+        return { id: c.id, nom: c.nom, ram: ram, etg: etg, chr: chr, taskTot: taskTot, taskDetail: taskDetail, objDone: objDone, objTot: objs.length, ramObj: num(tg.ram), basale: num(tg.basale), active: ram > 0 || etg > 0 || chr > 0 || taskTot > 0 || objDone > 0 };
+      });
+    }));
+  }
+  function openCoach() {
+    var box = overlay(); header(box, "📊 Récap & réglages");
+    var body = document.createElement("div"); body.innerHTML = '<div style="color:' + C.dim + '">Chargement…</div>'; box.appendChild(body);
+    buildToday().then(function (rows) {
+      var act = rows.filter(function (r) { return r.active; });
+      var html = '<div style="background:' + C.card + ';border:1px solid ' + C.border + ';border-radius:12px;padding:12px;margin-bottom:14px"><div style="font-size:12px;font-weight:800;color:' + C.gold + '">Aujourd\'hui — ' + act.length + ' active' + (act.length > 1 ? 's' : '') + ' / ' + rows.length + '</div>';
+      if (!act.length) html += '<div style="font-size:12px;color:' + C.dim + ';margin-top:6px">Personne n\'a encore bougé aujourd\'hui.</div>';
+      act.forEach(function (r) { var b = []; if (r.ramObj > 0) b.push("💪 " + r.ram + "/" + r.ramObj + " ram."); else if (r.ram) b.push("💪 " + r.ram + " ram."); if (r.etg) b.push("🪜 " + r.etg); if (r.chr) b.push("⏱ " + fmtTime(r.chr)); if (r.objDone) b.push("🎯 " + r.objDone + "/" + r.objTot); if (r.taskTot) b.push("🧮 " + r.taskTot); var det = r.taskDetail.length ? ('<div style="font-size:10.5px;color:' + C.dim + ';margin-top:2px">' + r.taskDetail.map(function (d) { return d.titre + " ×" + d.n; }).join(" · ") + '</div>') : ''; html += '<div style="margin-top:10px;padding-top:10px;border-top:1px solid ' + C.border + '"><div style="font-weight:700;font-size:13px">' + (r.nom || r.id) + '</div><div style="font-size:11.5px;margin-top:2px">' + (b.join(" · ") || "—") + '</div>' + det + '</div>'; });
+      html += '</div><label style="font-size:11px;color:' + C.dim + ';text-transform:uppercase;letter-spacing:.06em">Cliente</label><select id="exh-sel" style="width:100%;margin:6px 0 12px;padding:10px 12px;border-radius:10px;background:' + C.surf + ';color:' + C.text + ';border:1px solid ' + C.border + ';font:inherit"><option value="">— Choisir —</option>' + coachClients().map(function (c) { return '<option value="' + c.id + '">' + (c.nom || c.id) + '</option>'; }).join("") + '</select><div id="exh-detail"></div>';
+      body.innerHTML = html;
+      body.querySelector("#exh-sel").onchange = function () { renderDetail(this.value, body.querySelector("#exh-detail")); };
+    }).catch(function () { body.innerHTML = '<div style="color:#E07060">Impossible de charger (réseau).</div>'; });
+  }
+  function renderDetail(id, target) {
+    if (!id) { target.innerHTML = ""; return; }
+    target.innerHTML = '<div style="color:' + C.dim + ';padding:10px 0">Chargement…</div>';
+    Promise.all([loadTargets(id), cloudGet(id + "-ergohist"), cloudGet(id + "-ergolive"), cloudGet(id + "-taskcount"), loadScans(id)]).then(function (res) {
+      var tg = res[0] || { ram: 0, basale: 0 }, hist = res[1] || {}, live = res[2] || {}, tc = res[3] || {}, measures = res[4] || [];
+      var setBox = '<div style="background:' + C.card + ';border:1px solid ' + C.gold + '55;border-radius:12px;padding:12px;margin-bottom:12px"><div style="font-size:12px;font-weight:800;color:' + C.gold + ';margin-bottom:10px">⚙️ Valeurs fixées par le coach</div><div style="display:flex;gap:10px;margin-bottom:10px"><div style="flex:1"><label style="font-size:10px;color:' + C.dim + ';display:block;margin-bottom:4px">Objectif ramassages / jour</label><input id="exh-ram" type="number" inputmode="numeric" value="' + (tg.ram || "") + '" placeholder="ex : 25" style="width:100%;box-sizing:border-box;padding:9px 10px;border-radius:8px;border:1px solid ' + C.border + ';background:' + C.surf + ';color:' + C.text + ';font:inherit"></div><div style="flex:1"><label style="font-size:10px;color:' + C.dim + ';display:block;margin-bottom:4px">Basale (kcal / jour)</label><input id="exh-bas" type="number" inputmode="numeric" value="' + (tg.basale || "") + '" placeholder="ex : 1650" style="width:100%;box-sizing:border-box;padding:9px 10px;border-radius:8px;border:1px solid ' + C.border + ';background:' + C.surf + ';color:' + C.text + ';font:inherit"></div></div><button id="exh-save" style="width:100%;padding:10px;border:none;border-radius:9px;background:' + C.gold + ';color:' + C.bg + ';font-weight:800;cursor:pointer">Enregistrer</button><div id="exh-saved" style="font-size:11px;color:' + C.ok + ';text-align:center;margin-top:6px;height:14px"></div></div>';
+      var ergo = Object.assign({}, hist.ergo || {}), chrono = Object.assign({}, hist.chrono || {}); var lv = live.ergoLive, cv = live.chronoLive;
+      if (lv && lv.date) { var pv = ergo[lv.date] || {}; ergo[lv.date] = { squat: Math.max(pv.squat || 0, lv.squat || 0), hinge: Math.max(pv.hinge || 0, lv.hinge || 0), fente: Math.max(pv.fente || 0, lv.fente || 0), etages: Math.max(pv.etages || 0, lv.etages || 0) }; }
+      if (cv && cv.date) chrono[cv.date] = Math.max(chrono[cv.date] || 0, cv.base || 0);
+      var days = tc.days || {}; function tkTot(d) { var o = days[d] || {}; return Object.keys(o).reduce(function (s, k) { return s + (o[k] || 0); }, 0); }
+      var dd = {}; [ergo, chrono, days].forEach(function (o) { Object.keys(o).forEach(function (d) { if (isDate(d)) dd[d] = 1; }); });
+      var list = Object.keys(dd).sort().reverse(), t = today(), histHtml;
+      if (!list.length) histHtml = '<div style="padding:14px;text-align:center;color:' + C.dim + '">Aucune donnée d\'historique.</div>';
+      else { var rows = list.map(function (d) { var e = ergo[d] || {}, ram = (e.squat || 0) + (e.hinge || 0) + (e.fente || 0), ch = chrono[d] ? fmtTime(chrono[d]) : "—", tk = tkTot(d), hl = d === t; return '<tr style="' + (hl ? "background:" + C.gold + "14;" : "") + 'border-bottom:1px solid ' + C.border + '"><td style="padding:7px 8px;color:' + (hl ? C.gold : C.text) + ';font-weight:' + (hl ? 700 : 400) + '">' + fmtDate(d) + (hl ? " • auj." : "") + '</td><td style="padding:7px 8px;text-align:center;font-weight:700;color:' + C.gold + '">' + ram + '</td><td style="padding:7px 8px;text-align:center">' + (e.etages || 0) + '</td><td style="padding:7px 8px;text-align:center;color:' + (tk ? C.ok : C.dim) + '">' + tk + '</td><td style="padding:7px 8px;text-align:center;color:' + C.dim + '">' + ch + '</td></tr>'; }).join(""); histHtml = '<div style="overflow:auto;border:1px solid ' + C.border + ';border-radius:10px"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:' + C.surf + ';color:' + C.dim + '">' + ['Date', 'Ramass.', '🪜 Ét.', '🧮 Tâches', '⏱ Chrono'].map(function (h) { return '<th style="padding:8px;text-align:' + (h === 'Date' ? 'left' : 'center') + ';white-space:nowrap">' + h + '</th>'; }).join("") + '</tr></thead><tbody>' + rows + '</tbody></table></div>'; }
+      target.innerHTML = setBox + measuresCard(measures) + '<button id="exh-scanc" style="width:100%;padding:11px;margin-bottom:12px;border:1.5px solid ' + C.gold + '66;border-radius:12px;background:' + C.card + ';color:' + C.gold + ';font-weight:700;cursor:pointer">📷 Scanner une mesure pour cette cliente</button>' + histHtml;
+      var ramI = target.querySelector("#exh-ram"), basI = target.querySelector("#exh-bas"), saved = target.querySelector("#exh-saved");
+      target.querySelector("#exh-save").onclick = function () { setTargets(id, { ram: ramI.value, basale: basI.value }).then(function () { saved.textContent = "✓ Enregistré"; setTimeout(function () { saved.textContent = ""; }, 2500); }); };
+      target.querySelector("#exh-scanc").onclick = function () { openScan(id); };
+    }).catch(function () { target.innerHTML = '<div style="color:#E07060;padding:12px">Erreur réseau.</div>'; });
+  }
+  function coachRecapNotif() {
+    var s = session(); if (!s || s.role !== "coach") return;
+    if (!("Notification" in window) || Notification.permission !== "granted") return;
+    var flag = "exhome_coachrecap_" + today(); if (localStorage.getItem(flag)) return;
+    buildToday().then(function (rows) { var act = rows.filter(function (r) { return r.active; }); var body = act.length ? act.map(function (r) { var b = []; if (r.ramObj > 0) b.push(r.ram + "/" + r.ramObj + " ram."); else if (r.ram) b.push(r.ram + " ram."); if (r.chr) b.push(fmtTime(r.chr)); if (r.taskTot) b.push(r.taskTot + " tâches"); return r.nom + " : " + (b.join(" · ") || "actif"); }).join("\n") : "Personne active pour l'instant."; try { new Notification("Ex Home — récap (" + act.length + " active" + (act.length > 1 ? "s" : "") + ")", { body: body }); localStorage.setItem(flag, "1"); } catch (e) {} });
+  }
   function refreshButton() {
-    var s = session();
-    var btn = document.getElementById("exh-hist-btn");
-    if (s && s.role === "coach") { if (!btn) buildButton(); }
-    else if (btn) { btn.remove(); }
+    var s = session(), btn = document.getElementById("exh-btn");
+    if (!s) { if (btn) btn.remove(); return; }
+    if (!btn) { btn = document.createElement("button"); btn.id = "exh-btn"; btn.style.cssText = btnStyle(); document.body.appendChild(btn); }
+    if (s.role === "coach") { btn.textContent = "📊 Récap"; btn.onclick = openCoach; coachRecapNotif(); }
+    else if (s.role === "client" && s.clientId) { btn.textContent = "🧮 Mon suivi"; btn.onclick = function () { openTasks(s.clientId); }; }
+    else { btn.remove(); }
   }
   window.addEventListener("load", function () { setTimeout(refreshButton, 1500); });
   setInterval(refreshButton, 4000);
