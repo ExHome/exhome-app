@@ -1023,14 +1023,8 @@ react-dom/cjs/react-dom-client.production.js:
       if (!nutBtn) {
         nutBtn = document.createElement("button"); nutBtn.id = "exh-nutbtn";
         nutBtn.style.cssText = "position:fixed;right:14px;bottom:14px;z-index:9001;background:" + C.gold + ";color:" + C.bg + ";border:none;border-radius:24px;padding:11px 16px;font:700 13px system-ui,-apple-system,sans-serif;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.45)";
-        nutBtn.textContent = "📋 Bilan nutritionnel";
-        nutBtn.onclick = function () {
-          var s = session(), id = null;
-          if (s && s.role === "client" && s.clientId) id = s.clientId;
-          else if (s && s.role === "coach") { var m = coachClients().filter(function (c) { return c.nom && txt.indexOf(c.nom) > -1; }); if (m.length === 1) id = m[0].id; }
-          if (id) openNutritionAudit(id);
-          else if (s && s.role === "coach") openCoach();
-        };
+        nutBtn.textContent = "🍽️ Nutrition";
+        nutBtn.onclick = openNutriMenu;
         document.body.appendChild(nutBtn);
       }
     } else if (nutBtn) { nutBtn.remove(); nutBtn = null; }
@@ -1186,6 +1180,7 @@ react-dom/cjs/react-dom-client.production.js:
       camera: '<rect x="3" y="7" width="18" height="13" rx="2.5"/><circle cx="12" cy="13.5" r="3.5"/><path d="M8.5 7l1.2-2.2h4.6L15.5 7"/>',
       heart: '<path d="M12 20s-7-4.3-7-9.3a3.8 3.8 0 0 1 7-2.2 3.8 3.8 0 0 1 7 2.2C19 15.7 12 20 12 20z" fill="' + O + '" fill-opacity="0.42"/>',
       food: '<line x1="8" y1="7" x2="8" y2="21"/><path d="M6 3v3.8M10 3v3.8M6 6.8c0 1.1.9 2 2 2s2-.9 2-2"/><path d="M16.5 3c-1.4 0-2.2 1.7-2.2 4.2s.8 3.4 2.2 3.4v10.4"/>',
+      apple: '<path d="M12 8c-2-1.8-5-1.3-6 1-1.2 2.7 0 7 2 9 1 1 2 1.2 4 1.2s3-.2 4-1.2c2-2 3.2-6.3 2-9-1-2.3-4-2.8-6-1z"/><path d="M12 8c.2-2 1.5-3.2 3.3-3.4" stroke="' + O + '"/>',
       doc: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8.5 12.5l2.2 2.2 4-4.2" stroke="' + O + '"/>',
       drop: '<path d="M12 3.2s6 6.3 6 10.3a6 6 0 0 1-12 0C6 9.5 12 3.2 12 3.2z"/><path d="M9.3 14.2a2.7 2.7 0 0 0 2.7 2.7" stroke="' + O + '"/>',
       calendar: '<rect x="4" y="5" width="16" height="16" rx="2.5"/><line x1="4" y1="9.5" x2="20" y2="9.5"/><line x1="9" y1="3" x2="9" y2="6"/><line x1="15" y1="3" x2="15" y2="6"/><circle cx="12" cy="14.5" r="1.9" fill="' + O + '" stroke="' + O + '"/>',
@@ -1205,6 +1200,7 @@ react-dom/cjs/react-dom-client.production.js:
       nat("heart", "Sant\u00e9", "Sant\u00e9"),
       nat("food", "Nutrition (repas)", "Nutrition"),
       { ic: "doc", label: "Bilan nutritionnel", fn: needId(openNutritionAudit) },
+      { ic: "apple", label: "Bibliothèque", fn: function () { openFoodLib(); } },
       nat("drop", "Hydratation", "Hydratation"),
       nat("calendar", "S\u00e9ances", "S\u00e9ances"),
       nat("chat", "Messages", "Messages")
@@ -1227,8 +1223,333 @@ react-dom/cjs/react-dom-client.production.js:
     box.appendChild(grid);
     var ver = document.createElement("div");
     ver.style.cssText = "text-align:center;font-size:11px;color:" + C.dim + ";margin-top:16px;opacity:.8";
-    ver.textContent = "Ex Home · interface v23 (29-06)";
+    ver.textContent = "Ex Home · interface v25 (29-06)";
     box.appendChild(ver);
+  }
+  /* ===================== Bibliothèque alimentaire partagée v24 ===================== */
+  function esc(s) { return (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+  function normName(s) { return (s || "").trim().toLowerCase(); }
+  function fround(n, d) { var f = Math.pow(10, d || 0); return Math.round((n || 0) * f) / f; }
+  var SEED_VERSION = 2;
+  function foodSeed() {
+    var raw = [
+    ["Pomme",100,"g",52,0.3,14,0.2],
+    ["Banane",100,"g",89,1.1,23,0.3],
+    ["Orange",100,"g",47,0.9,12,0.1],
+    ["Fraise",100,"g",32,0.7,7.7,0.3],
+    ["Raisin",100,"g",69,0.7,18,0.2],
+    ["Poire",100,"g",57,0.4,15,0.1],
+    ["Pêche",100,"g",39,0.9,10,0.3],
+    ["Abricot",100,"g",48,1.4,11,0.4],
+    ["Kiwi",100,"g",61,1.1,15,0.5],
+    ["Ananas",100,"g",50,0.5,13,0.1],
+    ["Mangue",100,"g",60,0.8,15,0.4],
+    ["Pastèque",100,"g",30,0.6,8,0.2],
+    ["Melon",100,"g",34,0.8,8,0.2],
+    ["Cerise",100,"g",63,1,16,0.2],
+    ["Citron",100,"g",29,1.1,9,0.3],
+    ["Framboise",100,"g",52,1.2,12,0.7],
+    ["Myrtille",100,"g",57,0.7,14,0.3],
+    ["Prune",100,"g",46,0.7,11,0.3],
+    ["Clémentine",100,"g",47,0.9,12,0.2],
+    ["Pamplemousse",100,"g",42,0.8,11,0.1],
+    ["Avocat",100,"g",160,2,9,15],
+    ["Figue",100,"g",74,0.8,19,0.3],
+    ["Datte",100,"g",277,1.8,75,0.2],
+    ["Grenade",100,"g",83,1.7,19,1.2],
+    ["Nectarine",100,"g",44,1.1,11,0.3],
+    ["Cassis",100,"g",63,1.4,15,0.4],
+    ["Tomate",100,"g",18,0.9,3.9,0.2],
+    ["Carotte",100,"g",41,0.9,10,0.2],
+    ["Courgette",100,"g",17,1.2,3.1,0.3],
+    ["Brocoli",100,"g",34,2.8,7,0.4],
+    ["Chou-fleur",100,"g",25,1.9,5,0.3],
+    ["Épinard",100,"g",23,2.9,3.6,0.4],
+    ["Salade verte",100,"g",15,1.4,2.9,0.2],
+    ["Concombre",100,"g",15,0.7,3.6,0.1],
+    ["Poivron",100,"g",31,1,6,0.3],
+    ["Aubergine",100,"g",25,1,6,0.2],
+    ["Haricot vert",100,"g",31,1.8,7,0.1],
+    ["Petit pois",100,"g",81,5,14,0.4],
+    ["Pomme de terre",100,"g",77,2,17,0.1],
+    ["Patate douce",100,"g",86,1.6,20,0.1],
+    ["Oignon",100,"g",40,1.1,9,0.1],
+    ["Ail",100,"g",149,6.4,33,0.5],
+    ["Champignon",100,"g",22,3.1,3.3,0.3],
+    ["Maïs",100,"g",86,3.2,19,1.2],
+    ["Betterave",100,"g",43,1.6,10,0.2],
+    ["Céleri",100,"g",16,0.7,3,0.2],
+    ["Chou",100,"g",25,1.3,6,0.1],
+    ["Poireau",100,"g",61,1.5,14,0.3],
+    ["Potiron",100,"g",26,1,6.5,0.1],
+    ["Asperge",100,"g",20,2.2,3.9,0.1],
+    ["Radis",100,"g",16,0.7,3.4,0.1],
+    ["Endive",100,"g",17,1,4,0.1],
+    ["Fenouil",100,"g",31,1.2,7,0.2],
+    ["Artichaut",100,"g",47,3.3,11,0.2],
+    ["Navet",100,"g",28,0.9,6,0.1],
+    ["Chou de Bruxelles",100,"g",43,3.4,9,0.3],
+    ["Poulet (blanc)",100,"g",165,31,0,3.6],
+    ["Poulet (cuisse)",100,"g",209,26,0,11],
+    ["Dinde (blanc)",100,"g",135,29,0,1],
+    ["Bœuf haché 5%",100,"g",137,21,0,5],
+    ["Bœuf haché 15%",100,"g",215,19,0,15],
+    ["Steak de bœuf",100,"g",250,26,0,15],
+    ["Porc (filet)",100,"g",143,21,0,6],
+    ["Côte de porc",100,"g",231,26,0,14],
+    ["Agneau",100,"g",294,25,0,21],
+    ["Veau",100,"g",172,24,0,8],
+    ["Jambon blanc",100,"g",107,18,1,3.5],
+    ["Bacon",100,"g",541,37,1.4,42],
+    ["Saucisse",100,"g",300,12,2,27],
+    ["Lardons",100,"g",300,14,1,27],
+    ["Canard",100,"g",337,19,0,28],
+    ["Chorizo",100,"g",455,24,2,38],
+    ["Merguez",100,"g",290,15,1,25],
+    ["Saucisson sec",100,"g",455,25,2,38],
+    ["Saumon",100,"g",208,20,0,13],
+    ["Thon frais",100,"g",144,23,0,5],
+    ["Thon au naturel (boîte)",100,"g",116,26,0,1],
+    ["Cabillaud",100,"g",82,18,0,0.7],
+    ["Sole",100,"g",86,17,0,1.2],
+    ["Maquereau",100,"g",205,19,0,14],
+    ["Sardine",100,"g",208,25,0,11],
+    ["Truite",100,"g",119,20,0,3.5],
+    ["Crevette",100,"g",99,24,0.2,0.3],
+    ["Moule",100,"g",86,12,4,2],
+    ["Crabe",100,"g",87,18,0,1],
+    ["Hareng",100,"g",158,18,0,9],
+    ["Bar",100,"g",97,18,0,2.5],
+    ["Colin/lieu",100,"g",90,18,0,1],
+    ["Saumon fumé",100,"g",182,25,0,9],
+    ["Surimi",100,"g",95,8,12,1],
+    ["Calmar",100,"g",92,16,3,1.4],
+    ["Œuf",1,"pièce",78,6,0.6,5],
+    ["Blanc d'œuf",1,"pièce",17,3.6,0.2,0.1],
+    ["Lait 1/2 écrémé",100,"ml",46,3.3,4.8,1.6],
+    ["Lait entier",100,"ml",64,3.2,4.8,3.6],
+    ["Lait écrémé",100,"ml",34,3.4,5,0.1],
+    ["Yaourt nature",100,"g",61,3.5,4.7,3.3],
+    ["Yaourt grec",100,"g",97,9,4,5],
+    ["Fromage blanc 0%",100,"g",47,8,4,0.2],
+    ["Fromage blanc 20%",100,"g",80,7.5,4,3],
+    ["Skyr",100,"g",63,11,4,0.2],
+    ["Beurre",100,"g",717,0.9,0.1,81],
+    ["Crème fraîche 30%",100,"g",290,2.4,3,30],
+    ["Crème fraîche légère 15%",100,"g",160,3,4,15],
+    ["Emmental",100,"g",380,28,0,30],
+    ["Camembert",100,"g",300,20,0.5,24],
+    ["Comté",100,"g",410,27,0,34],
+    ["Mozzarella",100,"g",280,22,2,22],
+    ["Parmesan",100,"g",431,38,4,29],
+    ["Roquefort",100,"g",369,19,2,31],
+    ["Chèvre",100,"g",364,22,2,30],
+    ["Feta",100,"g",264,14,4,21],
+    ["Ricotta",100,"g",174,11,3,13],
+    ["Cheddar",100,"g",402,25,1.3,33],
+    ["Cottage cheese",100,"g",98,11,3.4,4.3],
+    ["Crème dessert",100,"g",120,3,20,3],
+    ["Petit-suisse",100,"g",95,9,4,4.5],
+    ["Riz cuit",100,"g",130,2.7,28,0.3],
+    ["Riz complet cuit",100,"g",111,2.6,23,0.9],
+    ["Pâtes cuites",100,"g",158,6,31,1],
+    ["Pâtes complètes cuites",100,"g",124,5,26,0.5],
+    ["Quinoa cuit",100,"g",120,4.4,21,1.9],
+    ["Boulgour cuit",100,"g",83,3,19,0.2],
+    ["Semoule cuite",100,"g",112,3.8,23,0.2],
+    ["Couscous cuit",100,"g",112,3.8,23,0.2],
+    ["Lentilles cuites",100,"g",116,9,20,0.4],
+    ["Pois chiches cuits",100,"g",164,9,27,2.6],
+    ["Haricots rouges cuits",100,"g",127,9,23,0.5],
+    ["Flocons d'avoine",100,"g",389,17,66,7],
+    ["Pain",100,"g",265,9,49,3.2],
+    ["Baguette",100,"g",270,9,55,1.3],
+    ["Pain complet",100,"g",247,9,41,3.4],
+    ["Pain de mie",100,"g",280,8,50,4.5],
+    ["Biscotte",100,"g",410,12,75,6],
+    ["Corn flakes",100,"g",357,7,84,0.9],
+    ["Muesli",100,"g",360,10,60,8],
+    ["Farine de blé",100,"g",364,10,76,1],
+    ["Polenta cuite",100,"g",85,2,18,0.4],
+    ["Gnocchi",100,"g",160,4,32,2],
+    ["Blé (Ebly) cuit",100,"g",120,4,25,0.5],
+    ["Amandes",100,"g",579,21,22,50],
+    ["Noix",100,"g",654,15,14,65],
+    ["Noisettes",100,"g",628,15,17,61],
+    ["Cacahuètes",100,"g",567,26,16,49],
+    ["Noix de cajou",100,"g",553,18,30,44],
+    ["Pistaches",100,"g",560,20,28,45],
+    ["Graines de courge",100,"g",559,30,11,49],
+    ["Graines de tournesol",100,"g",584,21,20,51],
+    ["Graines de chia",100,"g",486,17,42,31],
+    ["Graines de lin",100,"g",534,18,29,42],
+    ["Beurre de cacahuète",100,"g",588,25,20,50],
+    ["Tofu",100,"g",76,8,1.9,4.8],
+    ["Tempeh",100,"g",192,20,8,11],
+    ["Edamame",100,"g",121,12,9,5],
+    ["Pois cassés cuits",100,"g",118,8,21,0.4],
+    ["Huile d'olive",100,"ml",884,0,0,100],
+    ["Huile de tournesol",100,"ml",884,0,0,100],
+    ["Huile de coco",100,"g",862,0,0,100],
+    ["Margarine",100,"g",717,0.2,0.7,80],
+    ["Mayonnaise",100,"g",680,1,1.5,75],
+    ["Croissant",100,"g",406,8,46,21],
+    ["Pain au chocolat",100,"g",414,8,44,23],
+    ["Brioche",100,"g",350,8,50,13],
+    ["Crêpe",100,"g",219,6,28,9],
+    ["Gaufre",100,"g",290,6,38,13],
+    ["Biscuit sablé",100,"g",480,6,65,22],
+    ["Chocolat noir",100,"g",546,5,61,31],
+    ["Chocolat au lait",100,"g",535,7,59,30],
+    ["Pâte à tartiner",100,"g",539,6,57,31],
+    ["Confiture",100,"g",250,0.5,60,0.1],
+    ["Miel",100,"g",304,0.3,82,0],
+    ["Sucre",100,"g",400,0,100,0],
+    ["Glace vanille",100,"g",207,3.5,24,11],
+    ["Madeleine",100,"g",440,6,52,22],
+    ["Cookie",100,"g",471,5,64,22],
+    ["Pizza margherita",100,"g",266,11,33,10],
+    ["Frites",100,"g",312,3.4,41,15],
+    ["Hamburger",100,"g",250,13,28,10],
+    ["Quiche lorraine",100,"g",280,10,20,18],
+    ["Lasagnes",100,"g",135,7,13,6],
+    ["Hummus",100,"g",166,8,14,10],
+    ["Soupe de légumes",100,"ml",40,1.5,7,0.8],
+    ["Ketchup",100,"g",112,1.2,26,0.1],
+    ["Moutarde",100,"g",66,4,5,4],
+    ["Sauce tomate",100,"g",35,1.6,7,0.3],
+    ["Olives",100,"g",145,1,4,15],
+    ["Cornichon",100,"g",11,0.5,2.3,0.2],
+    ["Pesto",100,"g",450,5,6,45],
+    ["Vinaigrette",100,"g",450,0.5,5,48],
+    ["Jus d'orange",100,"ml",45,0.7,10,0.2],
+    ["Jus de pomme",100,"ml",46,0.1,11,0.1],
+    ["Coca-cola",100,"ml",42,0,10.6,0],
+    ["Bière",100,"ml",43,0.5,3.6,0],
+    ["Vin rouge",100,"ml",85,0.1,2.6,0],
+    ["Café noir",100,"ml",2,0.1,0,0],
+    ["Thé",100,"ml",1,0,0.2,0],
+    ["Smoothie",100,"ml",60,1,13,0.5],
+    ["Lait d'amande",100,"ml",24,0.5,3,1.1],
+    ["Lait de soja",100,"ml",43,3.3,2.5,1.8]
+    ];
+    return raw.map(function (r) { return { nom: r[0], base: r[1], unit: r[2], kcal: r[3], p: r[4], g: r[5], l: r[6], ts: 2 }; });
+  }
+  function localFoodLib() { var o = rLS("exhome_foodlib"); return (o && o.foods) || []; }
+  function saveLocalFoodLib(foods) { wLS("exhome_foodlib", { foods: foods, updatedAt: new Date().toISOString() }); }
+  function mergeFoods(a, b) {
+    var map = {};
+    (a || []).concat(b || []).forEach(function (f) {
+      if (!f || !f.nom) return; var k = normName(f.nom); var ex = map[k];
+      if (!ex || (f.ts || 0) >= (ex.ts || 0)) map[k] = f;
+    });
+    return Object.keys(map).map(function (k) { return map[k]; }).sort(function (x, y) { return normName(x.nom).localeCompare(normName(y.nom)); });
+  }
+  function loadFoodLib() {
+    return cloudGet("__foodlib").then(function (r) {
+      var remote = (r && r.foods) || []; var merged = mergeFoods(remote, localFoodLib());
+      saveLocalFoodLib(merged); return merged;
+    }).catch(function () { return localFoodLib(); });
+  }
+  function addFood(food) {
+    food.ts = Date.now();
+    return cloudGet("__foodlib").then(function (r) {
+      var remote = (r && r.foods) || []; var all = mergeFoods(remote.concat(localFoodLib()), [food]);
+      saveLocalFoodLib(all);
+      return cloudPut("__foodlib", { foods: all, updatedAt: new Date().toISOString() }).then(function () { return all; });
+    }).catch(function () { var all = mergeFoods(localFoodLib(), [food]); saveLocalFoodLib(all); return all; });
+  }
+  function openFoodLib() {
+    var box = overlay(); header(box, "🍎 Bibliothèque aliments");
+    var intro = document.createElement("div"); intro.style.cssText = "font-size:12px;color:" + C.dim + ";margin:-6px 0 12px;line-height:1.5";
+    intro.textContent = "Chaque aliment ajouté enrichit la bibliothèque — pour toi et tes clientes. Calories et macros par quantité.";
+    box.appendChild(intro);
+    var bar = document.createElement("div"); bar.style.cssText = "display:flex;gap:8px;margin-bottom:12px";
+    var search = document.createElement("input"); search.placeholder = "Rechercher un aliment…";
+    search.style.cssText = "flex:1;min-width:0;background:" + C.surf + ";border:1px solid " + C.border + ";border-radius:10px;padding:10px 12px;color:" + C.text + ";font-size:13px;font-family:inherit;box-sizing:border-box";
+    var addBtn = document.createElement("button"); addBtn.textContent = "➕ Ajouter";
+    addBtn.style.cssText = "background:" + C.gold + ";color:" + C.bg + ";border:none;border-radius:10px;padding:10px 13px;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;white-space:nowrap";
+    bar.appendChild(search); bar.appendChild(addBtn); box.appendChild(bar);
+    var formWrap = document.createElement("div"); box.appendChild(formWrap);
+    var list = document.createElement("div"); box.appendChild(list);
+    var foods = [];
+    function renderList() {
+      var q = normName(search.value); list.innerHTML = "";
+      var shown = foods.filter(function (f) { return !q || normName(f.nom).indexOf(q) > -1; });
+      if (!shown.length) { var e = document.createElement("div"); e.style.cssText = "color:" + C.dim + ";font-size:12px;padding:8px 0"; e.textContent = q ? "Aucun aliment trouvé — ajoute-le !" : "Bibliothèque vide."; list.appendChild(e); return; }
+      shown.forEach(function (f) {
+        var card = document.createElement("div"); card.style.cssText = "background:" + C.surf + ";border:1px solid " + C.border + ";border-radius:12px;padding:11px 13px;margin-bottom:9px;cursor:pointer";
+        var hd = document.createElement("div"); hd.style.cssText = "display:flex;justify-content:space-between;align-items:baseline;gap:10px";
+        hd.innerHTML = '<div style="font-weight:700;font-size:13.5px;color:' + C.text + '">' + esc(f.nom) + '</div><div style="font-size:13px;font-weight:800;color:' + C.gold + '">' + fround(f.kcal) + ' <span style="font-size:10px;color:' + C.dim + ';font-weight:600">kcal / ' + f.base + ' ' + esc(f.unit) + '</span></div>';
+        var mac = document.createElement("div"); mac.style.cssText = "font-size:11px;color:" + C.dim + ";margin-top:4px"; mac.textContent = "P " + fround(f.p, 1) + " · G " + fround(f.g, 1) + " · L " + fround(f.l, 1) + " (g)";
+        var calc = document.createElement("div"); calc.style.cssText = "display:none;margin-top:10px;border-top:1px solid " + C.border + ";padding-top:10px";
+        var qrow = document.createElement("div"); qrow.style.cssText = "display:flex;gap:8px;align-items:center";
+        var qin = document.createElement("input"); qin.type = "number"; qin.value = f.base;
+        qin.style.cssText = "width:84px;background:" + C.bg + ";border:1px solid " + C.border + ";border-radius:8px;padding:8px;color:" + C.text + ";font-size:13px;font-family:inherit";
+        var qun = document.createElement("span"); qun.textContent = f.unit; qun.style.cssText = "font-size:12px;color:" + C.dim;
+        var res = document.createElement("div"); res.style.cssText = "margin-left:auto;font-size:14px;font-weight:800;color:" + C.gold;
+        var mac2 = document.createElement("div"); mac2.style.cssText = "font-size:11px;color:" + C.dim + ";margin-top:7px";
+        function upd() { var q2 = parseFloat(qin.value) || 0; var fct = f.base ? q2 / f.base : 0; res.innerHTML = fround(f.kcal * fct) + ' <span style="font-size:10px;color:' + C.dim + '">kcal</span>'; mac2.textContent = "P " + fround(f.p * fct, 1) + " · G " + fround(f.g * fct, 1) + " · L " + fround(f.l * fct, 1) + " (g)"; }
+        qin.oninput = upd; qin.onclick = function (e) { e.stopPropagation(); };
+        qrow.appendChild(qin); qrow.appendChild(qun); qrow.appendChild(res);
+        calc.appendChild(qrow); calc.appendChild(mac2);
+        card.appendChild(hd); card.appendChild(mac); card.appendChild(calc);
+        card.onclick = function () { var op = calc.style.display === "block"; calc.style.display = op ? "none" : "block"; if (!op) upd(); };
+        list.appendChild(card);
+      });
+    }
+    search.oninput = renderList;
+    var formOpen = false;
+    addBtn.onclick = function () {
+      formOpen = !formOpen; formWrap.innerHTML = ""; if (!formOpen) return;
+      var f = document.createElement("div"); f.style.cssText = "background:" + C.surf + ";border:1px solid " + C.gold + "55;border-radius:12px;padding:13px;margin-bottom:12px";
+      function inp(ph, type, val) { var i = document.createElement("input"); i.placeholder = ph; if (type) i.type = type; if (val !== undefined) i.value = val; i.style.cssText = "width:100%;background:" + C.bg + ";border:1px solid " + C.border + ";border-radius:8px;padding:9px;color:" + C.text + ";font-size:13px;font-family:inherit;box-sizing:border-box;margin-bottom:8px"; return i; }
+      var nom = inp("Nom de l'aliment");
+      var qtyRow = document.createElement("div"); qtyRow.style.cssText = "display:flex;gap:8px";
+      var base = inp("Quantité de référence", "number", 100);
+      var unit = document.createElement("select"); unit.style.cssText = "background:" + C.bg + ";border:1px solid " + C.border + ";border-radius:8px;padding:9px;color:" + C.text + ";font-size:13px;font-family:inherit;margin-bottom:8px";
+      ["g", "ml", "pièce"].forEach(function (u) { var o = document.createElement("option"); o.value = u; o.textContent = u; unit.appendChild(o); });
+      qtyRow.appendChild(base); qtyRow.appendChild(unit);
+      var kcal = inp("Calories (kcal) pour cette quantité", "number");
+      var mrow = document.createElement("div"); mrow.style.cssText = "display:flex;gap:8px";
+      var pp = inp("Prot. g", "number"); var gg = inp("Gluc. g", "number"); var ll = inp("Lip. g", "number");
+      mrow.appendChild(pp); mrow.appendChild(gg); mrow.appendChild(ll);
+      var save = document.createElement("button"); save.textContent = "Enregistrer dans la bibliothèque";
+      save.style.cssText = "width:100%;background:" + C.gold + ";color:" + C.bg + ";border:none;border-radius:9px;padding:11px;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;margin-top:4px";
+      var msg = document.createElement("div"); msg.style.cssText = "font-size:12px;margin-top:8px;color:" + C.dim;
+      save.onclick = function () {
+        var nm = (nom.value || "").trim(); if (!nm) { msg.textContent = "Donne un nom à l'aliment."; return; }
+        var food = { nom: nm, base: parseFloat(base.value) || 100, unit: unit.value, kcal: parseFloat(kcal.value) || 0, p: parseFloat(pp.value) || 0, g: parseFloat(gg.value) || 0, l: parseFloat(ll.value) || 0 };
+        msg.textContent = "Enregistrement…";
+        addFood(food).then(function (all) { foods = all; renderList(); formOpen = false; formWrap.innerHTML = ""; search.value = nm; renderList(); });
+      };
+      f.appendChild(nom); f.appendChild(qtyRow); f.appendChild(kcal); f.appendChild(mrow); f.appendChild(save); f.appendChild(msg);
+      formWrap.appendChild(f); nom.focus();
+    };
+    var loadingEl = document.createElement("div"); loadingEl.textContent = "Chargement…"; loadingEl.style.cssText = "color:" + C.dim + ";font-size:12px"; list.appendChild(loadingEl);
+    loadFoodLib().then(function (f) {
+      var appliedV = (rLS("exhome_foodseed_v") || {}).v || 0;
+      if (!f || !f.length || appliedV < SEED_VERSION) {
+        f = mergeFoods(f || [], foodSeed());
+        saveLocalFoodLib(f); wLS("exhome_foodseed_v", { v: SEED_VERSION });
+        cloudPut("__foodlib", { foods: f, updatedAt: new Date().toISOString() });
+      }
+      foods = f; renderList();
+    });
+  }
+  function openNutriMenu() {
+    var s = session(), id = null;
+    if (s && s.role === "client" && s.clientId) id = s.clientId;
+    else if (s && s.role === "coach") { var root = document.getElementById("root"); var txt = (root && root.textContent) || ""; var m = coachClients().filter(function (c) { return c.nom && txt.indexOf(c.nom) > -1; }); if (m.length === 1) id = m[0].id; }
+    var box = overlay(); header(box, "🍽️ Nutrition");
+    function bigBtn(emoji, title, desc, fn) {
+      var b = document.createElement("button"); b.className = "exh-tile";
+      b.style.cssText = "display:flex;gap:13px;align-items:center;width:100%;text-align:left;background:linear-gradient(160deg," + C.card + "," + C.surf + ");border:1px solid rgba(201,168,76,.30);border-radius:16px;padding:15px;margin-bottom:11px;cursor:pointer;color:" + C.text + ";font-family:inherit";
+      b.innerHTML = '<div style="font-size:26px;flex-shrink:0">' + emoji + '</div><div><div style="font-weight:700;font-size:14px">' + title + '</div><div style="font-size:12px;color:' + C.dim + ';margin-top:2px;line-height:1.4">' + desc + '</div></div>';
+      b.onclick = fn; box.appendChild(b);
+    }
+    bigBtn("📋", "Bilan nutritionnel", "Le questionnaire de découverte de la cliente", function () { if (id) openNutritionAudit(id); else if (s && s.role === "coach") openCoach(); });
+    bigBtn("🍎", "Bibliothèque aliments", "Calories & macros par aliment et par quantité", function () { openFoodLib(); });
   }
 })();
 </script>
