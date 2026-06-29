@@ -647,7 +647,7 @@ react-dom/cjs/react-dom-client.production.js:
       progAccordion(body, id);
       var grid = document.createElement("div"); grid.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px";
       addTile(grid, "📷", "Scanner une mesure", function () { openScan(id, function () { openClientDash(id); }); });
-      addTile(grid, "🥗", "Audit nutrition", function () { openNutritionAudit(id, function () { openClientDash(id); }); });
+      addTile(grid, "🥗", "Bilan nutritionnel", function () { openNutritionAudit(id, function () { openClientDash(id); }); });
       addTile(grid, "📊", "Mesures & évolution", function () { openMeasures(id, function () { openClientDash(id); }); });
       body.appendChild(grid);
     }).catch(function () { body.innerHTML = '<div style="color:#E07060">Erreur de chargement.</div>'; });
@@ -838,9 +838,9 @@ react-dom/cjs/react-dom-client.production.js:
     { k: "ameliorer", q: "Ce que tu aimerais améliorer", ph: "ex : moins de sucre le soir…" }
   ];
 
-  function localNutriAudit(id) { return rLS("exhome_nutriaudit_" + id) || { answers: {}, consent: false }; }
-  function saveNutriAudit(id, o) { wLS("exhome_nutriaudit_" + id, o); return cloudPut(id + "-nutriaudit", { answers: o.answers || {}, consent: !!o.consent, updatedAt: new Date().toISOString() }); }
-  function loadNutriAudit(id) { return cloudGet(id + "-nutriaudit").then(function (r) { var o = r ? { answers: r.answers || {}, consent: !!r.consent } : localNutriAudit(id); if (r) wLS("exhome_nutriaudit_" + id, o); return o; }).catch(function () { return localNutriAudit(id); }); }
+  function localNutriAudit(id) { return rLS("exhome_nutriaudit_" + id) || { answers: {}, consent: false, rgpd: false }; }
+  function saveNutriAudit(id, o) { wLS("exhome_nutriaudit_" + id, o); return cloudPut(id + "-nutriaudit", { answers: o.answers || {}, consent: !!o.consent, rgpd: !!o.rgpd, updatedAt: new Date().toISOString() }); }
+  function loadNutriAudit(id) { return cloudGet(id + "-nutriaudit").then(function (r) { var o = r ? { answers: r.answers || {}, consent: !!r.consent, rgpd: !!r.rgpd } : localNutriAudit(id); if (r) wLS("exhome_nutriaudit_" + id, o); return o; }).catch(function () { return localNutriAudit(id); }); }
   function readNativeJournal(id) { try { var v = localStorage.getItem("exhome_nutrition_" + id); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
   function pushNutriJournal(id) { var j = readNativeJournal(id); return cloudPut(id + "-nutrijournal", { journal: j, updatedAt: new Date().toISOString() }); }
   function clearNutriJournal(id) { return cloudPut(id + "-nutrijournal", { journal: null, revoked: true, updatedAt: new Date().toISOString() }); }
@@ -861,16 +861,23 @@ react-dom/cjs/react-dom-client.production.js:
   }
 
   function openNutritionAudit(id, back) {
-    var box = overlay(); header(box, "🥗 Audit nutrition", back);
+    var box = overlay(); header(box, "🥗 Bilan nutritionnel de découverte", back);
     var body = document.createElement("div"); body.innerHTML = '<div style="color:' + C.dim + '">Chargement…</div>'; box.appendChild(body);
     loadNutriAudit(id).then(function (a) {
-      var ans = Object.assign({}, a.answers || {}), consentState = !!a.consent;
+      var ans = Object.assign({}, a.answers || {}), consentState = !!a.consent, rgpdState = !!a.rgpd;
       body.innerHTML = "";
       var intro = document.createElement("div"); intro.style.cssText = "font-size:12px;color:" + C.dim + ";margin-bottom:14px"; intro.textContent = "Ces réponses aident ton coach à comprendre tes habitudes alimentaires et à mieux t'accompagner."; body.appendChild(intro);
       NUTRI_Q.forEach(function (q) { body.appendChild(nutriRadio(q, ans[q.k], function (v) { ans[q.k] = v; })); });
       NUTRI_TEXT.forEach(function (q) { body.appendChild(nutriText(q, ans[q.k], function (v) { ans[q.k] = v; })); });
 
-      var cBox = document.createElement("div"); cBox.style.cssText = "background:" + C.card + ";border:1px solid " + C.gold + "55;border-radius:12px;padding:12px;margin:6px 0 14px;display:flex;gap:12px;align-items:flex-start;cursor:pointer";
+      var rgBox = document.createElement("div"); rgBox.style.cssText = "background:" + C.surf + ";border:1px solid " + C.border + ";border-radius:12px;padding:12px;margin:6px 0 10px;display:flex;gap:10px;align-items:flex-start;cursor:pointer";
+      var rgChk = document.createElement("div");
+      function drawRg() { rgChk.style.cssText = "width:22px;height:22px;border-radius:6px;flex-shrink:0;border:2px solid " + (rgpdState ? C.ok : C.dim) + ";background:" + (rgpdState ? C.ok : "transparent") + ";color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800"; rgChk.textContent = rgpdState ? "✓" : ""; }
+      drawRg();
+      var rgTxt = document.createElement("div"); rgTxt.style.cssText = "font-size:11px;color:" + C.dim; rgTxt.textContent = "J'accepte que mes données soient recueillies et traitées par mon coach dans le cadre de mon accompagnement (RGPD).";
+      rgBox.onclick = function () { rgpdState = !rgpdState; drawRg(); };
+      rgBox.appendChild(rgChk); rgBox.appendChild(rgTxt); body.appendChild(rgBox);
+      var cBox = document.createElement("div"); cBox.style.cssText = "background:" + C.card + ";border:1px solid " + C.gold + "55;border-radius:12px;padding:12px;margin:0 0 14px;display:flex;gap:12px;align-items:flex-start;cursor:pointer";
       var sw = document.createElement("div");
       function drawSw() { sw.style.cssText = "width:44px;height:25px;border-radius:14px;flex-shrink:0;position:relative;background:" + (consentState ? C.ok : C.border); sw.innerHTML = '<div style="position:absolute;top:2px;left:' + (consentState ? "21px" : "2px") + ';width:21px;height:21px;border-radius:50%;background:#fff;transition:left .15s"></div>'; }
       drawSw();
@@ -878,12 +885,14 @@ react-dom/cjs/react-dom-client.production.js:
       cBox.onclick = function () { consentState = !consentState; drawSw(); };
       cBox.appendChild(sw); cBox.appendChild(ctxt); body.appendChild(cBox);
 
-      var save = document.createElement("button"); save.textContent = "Enregistrer mon audit"; save.style.cssText = "width:100%;padding:12px;border:none;border-radius:10px;background:" + C.gold + ";color:" + C.bg + ";font-weight:800;cursor:pointer";
+      var save = document.createElement("button"); save.textContent = "Enregistrer le bilan"; save.style.cssText = "width:100%;padding:12px;border:none;border-radius:10px;background:" + C.gold + ";color:" + C.bg + ";font-weight:800;cursor:pointer";
       var okMsg = document.createElement("div"); okMsg.style.cssText = "text-align:center;font-size:12px;color:" + C.ok + ";margin-top:8px;height:16px";
       save.onclick = function () {
-        saveNutriAudit(id, { answers: ans, consent: consentState }).then(function () {
+        if (!rgpdState) { okMsg.style.color = "#E07060"; okMsg.textContent = "Merci de cocher le consentement RGPD."; return; }
+        okMsg.style.color = C.ok;
+        saveNutriAudit(id, { answers: ans, consent: consentState, rgpd: rgpdState }).then(function () {
           (consentState ? pushNutriJournal(id) : clearNutriJournal(id));
-          okMsg.textContent = consentState ? "✓ Audit enregistré · journal partagé" : "✓ Audit enregistré · journal non partagé";
+          okMsg.textContent = consentState ? "✓ Bilan enregistré · journal partagé" : "✓ Bilan enregistré · journal non partagé";
         });
       };
       body.appendChild(save); body.appendChild(okMsg);
@@ -905,7 +914,7 @@ react-dom/cjs/react-dom-client.production.js:
     container.innerHTML = '<div style="font-size:12px;color:' + C.dim + '">Chargement nutrition…</div>';
     Promise.all([loadNutriAudit(id), loadNutriJournal(id)]).then(function (res) {
       var a = res[0] || { answers: {}, consent: false }, journal = res[1], ans = a.answers || {};
-      var html = '<div style="font-size:12px;font-weight:800;color:' + C.gold + ';margin-bottom:10px">🥗 Nutrition</div>';
+      var html = '<div style="font-size:12px;font-weight:800;color:' + C.gold + ';margin-bottom:10px">🥗 Nutrition</div>' + '<button id="exh-fillnutri" style="width:100%;padding:10px;margin-bottom:12px;border:1.5px solid ' + C.gold + '66;border-radius:10px;background:' + C.card + ';color:' + C.gold + ';font-weight:700;cursor:pointer">📝 Remplir / compléter le bilan nutritionnel</button>';
       var rows = [];
       NUTRI_Q.forEach(function (q) { if (ans[q.k]) rows.push([q.q, ans[q.k]]); });
       NUTRI_TEXT.forEach(function (q) { if (ans[q.k]) rows.push([q.q, ans[q.k]]); });
@@ -913,7 +922,7 @@ react-dom/cjs/react-dom-client.production.js:
       else html += '<div style="font-size:12px;color:' + C.dim + ';margin-bottom:10px">Audit non encore rempli par la cliente.</div>';
       if (a.consent && journal) html += renderJournal(journal);
       else html += '<div style="background:' + C.card + ';border:1px dashed ' + C.border + ';border-radius:12px;padding:12px;font-size:12px;color:' + C.dim + '">🔒 Journal alimentaire non partagé (consentement non donné par la cliente).</div>';
-      container.innerHTML = html;
+      container.innerHTML = html; var __fb = container.querySelector("#exh-fillnutri"); if (__fb) __fb.onclick = function () { openNutritionAudit(id, function () { openCoachDash(); }); };
     }).catch(function () { container.innerHTML = '<div style="color:#E07060;font-size:12px">Erreur nutrition.</div>'; });
   }
   /* ===================== Mesures & évolution (jour/semaine/mois) v11 ===================== */
