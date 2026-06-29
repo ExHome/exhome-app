@@ -374,18 +374,25 @@ react-dom/cjs/react-dom-client.production.js:
     });
   }
   var SCAN_FIELDS = [
-    { k: "poids", label: "Poids", unit: "kg", emoji: "\u2696\ufe0f", dec: true },
-    { k: "graisse", label: "Masse grasse", unit: "%", emoji: "\U0001FAC0", dec: true },
-    { k: "muscle", label: "Masse musculaire", unit: "kg", emoji: "\U0001F4AA", dec: true },
-    { k: "eau", label: "Eau", unit: "%", emoji: "\U0001F4A7", dec: true },
-    { k: "osseuse", label: "Masse osseuse", unit: "kg", emoji: "\U0001F9B4", dec: true },
-    { k: "imc", label: "IMC", unit: "", emoji: "\U0001F4CA", dec: true },
-    { k: "viscerale", label: "Graisse visc\u00e9rale", unit: "", emoji: "\U0001F536", dec: false },
-    { k: "metabolisme", label: "M\u00e9tabolisme de base", unit: "kcal", emoji: "\U0001F525", dec: false },
-    { k: "age", label: "\u00c2ge m\u00e9tabolique", unit: "ans", emoji: "\u23F3", dec: false },
-    { k: "maigre", label: "Masse maigre", unit: "kg", emoji: "\U0001F33F", dec: true },
-    { k: "calories", label: "Calories", unit: "kcal", emoji: "\U0001F37D\ufe0f", dec: false },
-    { k: "pas", label: "Pas", unit: "", emoji: "\U0001F463", dec: false }
+    { k: "poids", label: "Poids", unit: "kg", emoji: "\u2696\ufe0f", dec: true, col: "#C9A84C", low: false },
+    { k: "graisse", label: "Masse grasse", unit: "%", emoji: "\U0001FAC0", dec: true, col: "#C58A5B", low: true },
+    { k: "muscle", label: "Masse musculaire", unit: "kg", emoji: "\U0001F4AA", dec: true, col: "#3E8E6E", low: false },
+    { k: "eau", label: "Hydratation", unit: "%", emoji: "\U0001F4A7", dec: true, col: "#4FB0A8", low: false },
+    { k: "metabolisme", label: "M\u00e9tabolisme basal", unit: "kcal", emoji: "\U0001F4A4", dec: false, col: "#B8902F", low: false },
+    { k: "imc", label: "IMC", unit: "", emoji: "\U0001F4D0", dec: true, col: "#A08030", low: true },
+    { k: "osseuse", label: "Masse osseuse", unit: "kg", emoji: "\U0001F9B4", dec: true, col: "#97A18A", low: false },
+    { k: "tourTaille", label: "Tour de taille", unit: "cm", emoji: "\U0001F4CF", dec: true, col: "#B5683C", low: true },
+    { k: "tourHanches", label: "Tour de hanches", unit: "cm", emoji: "\u2B55", dec: true, col: "#CB8A55", low: true },
+    { k: "fcRepos", label: "FC repos", unit: "bpm", emoji: "\u2764\ufe0f", dec: false, col: "#E0703A", low: true },
+    { k: "pas", label: "Pas", unit: "", emoji: "\U0001F45F", dec: false, col: "#5A9BD4", low: false },
+    { k: "sommeil", label: "Sommeil", unit: "h", emoji: "\U0001F634", dec: true, col: "#7E6BB0", low: false },
+    { k: "calories", label: "Apport calorique", unit: "kcal", emoji: "\U0001F525", dec: false, col: "#E0852E", low: false },
+    { k: "viscerale", label: "Graisse visc\u00e9rale", unit: "", emoji: "\U0001F534", dec: false, col: "#A85A3C", low: true },
+    { k: "sousCutanee", label: "Graisse sous-cutan\u00e9e", unit: "%", emoji: "\U0001F7E1", dec: true, col: "#D0A06A", low: true },
+    { k: "proteines", label: "Prot\u00e9ines", unit: "%", emoji: "\U0001F9EC", dec: true, col: "#5AA67E", low: false },
+    { k: "muscleSquel", label: "Muscle squelettique", unit: "%", emoji: "\u26A1", dec: true, col: "#2F7D5A", low: false },
+    { k: "maigre", label: "Masse maigre", unit: "kg", emoji: "\U0001F9F1", dec: true, col: "#4E9B72", low: false },
+    { k: "age", label: "\u00c2ge m\u00e9tabolique", unit: "ans", emoji: "\u23F3", dec: false, col: "#CDB46A", low: true }
   ];
   function parseMeasures(text) {
     var t = (text || "").replace(/,/g, ".").toLowerCase();
@@ -393,11 +400,17 @@ react-dom/cjs/react-dom-client.production.js:
     return {
       viscerale: g(/visc[e\u00e9]rale?\D{0,12}(\d{1,2})/),
       graisse: g(/(?:masse\s*grasse|graisse\s*corp)\D{0,12}(\d{1,2}(?:\.\d)?)/) || g(/(\d{1,2}(?:\.\d)?)\s*%/),
-      muscle: g(/(?:masse\s*musculaire|muscle)\D{0,12}(\d{2,3}(?:\.\d)?)/),
+      muscleSquel: g(/muscle\s*squelettique\D{0,12}(\d{1,2}(?:\.\d)?)/),
+      muscle: g(/(?:masse\s*musculaire|muscle(?!\s*squ))\D{0,12}(\d{2,3}(?:\.\d)?)/),
       eau: g(/(?:eau|hydrique|hydratation)\D{0,12}(\d{1,2}(?:\.\d)?)/),
-      osseuse: g(/masse\s*osseuse\D{0,12}(\d(?:\.\d)?)/),
+      osseuse: g(/(?:masse\s*osseuse|osseuse)\D{0,12}(\d(?:\.\d)?)/),
       imc: g(/(?:imc|bmi)\D{0,8}(\d{1,2}(?:\.\d)?)/),
       metabolisme: g(/(?:m[e\u00e9]tabolisme|basal|bmr)\D{0,14}(\d{3,4})/),
+      proteines: g(/prot[e\u00e9]ines?\D{0,12}(\d{1,2}(?:\.\d)?)/),
+      sousCutanee: g(/sous.?cutan[e\u00e9]e?\D{0,12}(\d{1,2}(?:\.\d)?)/),
+      tourTaille: g(/tour\s*de?\s*taille\D{0,12}(\d{2,3}(?:\.\d)?)/),
+      tourHanches: g(/tour\s*de?\s*hanches?\D{0,12}(\d{2,3}(?:\.\d)?)/),
+      sommeil: g(/sommeil\D{0,12}(\d(?:\.\d)?)/),
       age: g(/[a\u00e2]ge\s*m[e\u00e9]tabolique\D{0,8}(\d{1,2})/),
       maigre: g(/(?:masse\s*maigre|sans\s*graisse)\D{0,14}(\d{2,3}(?:\.\d)?)/),
       poids: g(/poids\D{0,10}(\d{2,3}(?:\.\d)?)/) || g(/(\d{2,3}(?:\.\d)?)\s*kg/),
@@ -407,7 +420,7 @@ react-dom/cjs/react-dom-client.production.js:
   }
 
   /* ===== Boucles + reset quotidien ===== */
-  function tick() { var s = session(); if (!s) return; if (s.role === "client" && s.clientId) { syncErgo(s.clientId); syncTasks(s.clientId); syncEffort(s.clientId); } }
+  function tick() { var s = session(); if (!s) return; if (s.role === "client" && s.clientId) { syncErgo(s.clientId); syncTasks(s.clientId); syncEffort(s.clientId); syncNutriJournal(s.clientId); } }
   window.addEventListener("load", function () { setTimeout(tick, 4000); });
   setInterval(tick, 60000);
   var seenDay = today(), pendingReload = false;
@@ -575,10 +588,10 @@ react-dom/cjs/react-dom-client.production.js:
       var list = Object.keys(dd).sort().reverse(), t = today(), histHtml;
       if (!list.length) histHtml = '<div style="padding:14px;text-align:center;color:' + C.dim + '">Aucune donnée d\'historique.</div>';
       else { var rows = list.map(function (d) { var e = ergo[d] || {}, ram = (e.squat || 0) + (e.hinge || 0) + (e.fente || 0), ch = chrono[d] ? fmtTime(chrono[d]) : "—", tk = tkTot(d), hl = d === t; return '<tr style="' + (hl ? "background:" + C.gold + "14;" : "") + 'border-bottom:1px solid ' + C.border + '"><td style="padding:7px 8px;color:' + (hl ? C.gold : C.text) + ';font-weight:' + (hl ? 700 : 400) + '">' + fmtDate(d) + (hl ? " • auj." : "") + '</td><td style="padding:7px 8px;text-align:center;font-weight:700;color:' + C.gold + '">' + ram + '</td><td style="padding:7px 8px;text-align:center">' + (e.etages || 0) + '</td><td style="padding:7px 8px;text-align:center;color:' + (tk ? C.ok : C.dim) + '">' + tk + '</td><td style="padding:7px 8px;text-align:center;color:' + C.dim + '">' + ch + '</td></tr>'; }).join(""); histHtml = '<div style="overflow:auto;border:1px solid ' + C.border + ';border-radius:10px"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:' + C.surf + ';color:' + C.dim + '">' + ['Date', 'Ramass.', '🪜 Ét.', '🧮 Tâches', '⏱ Chrono'].map(function (h) { return '<th style="padding:8px;text-align:' + (h === 'Date' ? 'left' : 'center') + ';white-space:nowrap">' + h + '</th>'; }).join("") + '</tr></thead><tbody>' + rows + '</tbody></table></div>'; }
-      target.innerHTML = setBox + measuresCard(measures) + '<button id="exh-scanc" style="width:100%;padding:11px;margin-bottom:12px;border:1.5px solid ' + C.gold + '66;border-radius:12px;background:' + C.card + ';color:' + C.gold + ';font-weight:700;cursor:pointer">📷 Scanner une mesure pour cette cliente</button>' + histHtml;
+      target.innerHTML = setBox + measuresCard(measures) + '<button id="exh-scanc" style="width:100%;padding:11px;margin-bottom:12px;border:1.5px solid ' + C.gold + '66;border-radius:12px;background:' + C.card + ';color:' + C.gold + ';font-weight:700;cursor:pointer">📷 Scanner une mesure pour cette cliente</button>' + '<button id="exh-meas" style="width:100%;padding:11px;margin-bottom:12px;border:1.5px solid ' + C.gold + '66;border-radius:12px;background:' + C.card + ';color:' + C.gold + ';font-weight:700;cursor:pointer">📊 Mesures & évolution</button>' + histHtml + '<div id="exh-nutri" style="margin-top:14px"></div>';
       var ramI = target.querySelector("#exh-ram"), basI = target.querySelector("#exh-bas"), saved = target.querySelector("#exh-saved");
       target.querySelector("#exh-save").onclick = function () { setTargets(id, { ram: ramI.value, basale: basI.value }).then(function () { saved.textContent = "✓ Enregistré"; setTimeout(function () { saved.textContent = ""; }, 2500); }); };
-      target.querySelector("#exh-scanc").onclick = function () { openScan(id); };
+      target.querySelector("#exh-scanc").onclick = function () { openScan(id); }; coachNutritionSection(id, target.querySelector("#exh-nutri")); var __mb = target.querySelector("#exh-meas"); if (__mb) __mb.onclick = function () { openMeasures(id); };
     }).catch(function () { target.innerHTML = '<div style="color:#E07060;padding:12px">Erreur réseau.</div>'; });
   }
   function coachRecapNotif() {
@@ -626,8 +639,10 @@ react-dom/cjs/react-dom-client.production.js:
       body.innerHTML = html;
       body.appendChild(buildEffortCard(id, effortDays));
       progAccordion(body, id);
-      var grid = document.createElement("div"); grid.style.cssText = "display:grid;grid-template-columns:1fr;gap:10px;margin-top:6px";
-      addTile(grid, "📷", "Scanner une mesure (poids, masse grasse…)", function () { openScan(id, function () { openClientDash(id); }); });
+      var grid = document.createElement("div"); grid.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px";
+      addTile(grid, "📷", "Scanner une mesure", function () { openScan(id, function () { openClientDash(id); }); });
+      addTile(grid, "🥗", "Audit nutrition", function () { openNutritionAudit(id, function () { openClientDash(id); }); });
+      addTile(grid, "📊", "Mesures & évolution", function () { openMeasures(id, function () { openClientDash(id); }); });
       body.appendChild(grid);
     }).catch(function () { body.innerHTML = '<div style="color:#E07060">Erreur de chargement.</div>'; });
   }
@@ -799,6 +814,159 @@ react-dom/cjs/react-dom-client.production.js:
     function render(sel) { seg.innerHTML = ""; EFFORT.forEach(function (e) { var on = sel === e.lvl; var b = document.createElement("button"); b.style.cssText = "flex:1;height:" + (on ? "26px" : "20px") + ";border-radius:7px;border:" + (on ? "2px solid " + C.text : "1px solid " + C.border) + ";background:" + e.c + (on ? "" : "77") + ";cursor:pointer"; b.title = e.label; b.onclick = function (ev) { ev.preventDefault(); setEffort(id, exKey, e.lvl); l.textContent = "Ressenti d'effort : " + e.label; render(e.lvl); }; seg.appendChild(b); }); }
     render(current);
     row.appendChild(l); row.appendChild(seg); return row;
+  }
+  /* ===================== Audit nutrition + journal (consentement) v10 ===================== */
+  var NUTRI_Q = [
+    { k: "repas", q: "Combien de repas par jour ?", opts: ["1–2", "3", "4+", "Grignotage fréquent"] },
+    { k: "petitdej", q: "Petit-déjeuner ?", opts: ["Tous les jours", "Parfois", "Jamais"] },
+    { k: "maison", q: "Cuisine maison ou extérieur ?", opts: ["Surtout maison", "Mixte", "Surtout extérieur/préparé"] },
+    { k: "legumes", q: "Fruits & légumes ?", opts: ["Rare", "Modéré", "Tous les jours"] },
+    { k: "sucre", q: "Grignotage sucré ?", opts: ["Rare", "Parfois", "Souvent"] },
+    { k: "boissons", q: "Boissons sucrées / alcool ?", opts: ["Rare", "Parfois", "Souvent"] },
+    { k: "hydratation", q: "Hydratation (eau / jour) ?", opts: ["< 1 L", "1–1,5 L", "> 1,5 L"] },
+    { k: "conseils", q: "Souhaite des conseils nutrition externes ?", opts: ["Oui", "Non", "Peut-être"] }
+  ];
+  var NUTRI_TEXT = [
+    { k: "restrictions", q: "Régime / allergies / restrictions", ph: "ex : végétarienne, sans lactose…" },
+    { k: "souhaits", q: "Tes souhaits / objectifs alimentaires", ph: "ex : plus d'énergie, perdre 3 kg…" },
+    { k: "ameliorer", q: "Ce que tu aimerais améliorer", ph: "ex : moins de sucre le soir…" }
+  ];
+
+  function localNutriAudit(id) { return rLS("exhome_nutriaudit_" + id) || { answers: {}, consent: false }; }
+  function saveNutriAudit(id, o) { wLS("exhome_nutriaudit_" + id, o); return cloudPut(id + "-nutriaudit", { answers: o.answers || {}, consent: !!o.consent, updatedAt: new Date().toISOString() }); }
+  function loadNutriAudit(id) { return cloudGet(id + "-nutriaudit").then(function (r) { var o = r ? { answers: r.answers || {}, consent: !!r.consent } : localNutriAudit(id); if (r) wLS("exhome_nutriaudit_" + id, o); return o; }).catch(function () { return localNutriAudit(id); }); }
+  function readNativeJournal(id) { try { var v = localStorage.getItem("exhome_nutrition_" + id); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
+  function pushNutriJournal(id) { var j = readNativeJournal(id); return cloudPut(id + "-nutrijournal", { journal: j, updatedAt: new Date().toISOString() }); }
+  function clearNutriJournal(id) { return cloudPut(id + "-nutrijournal", { journal: null, revoked: true, updatedAt: new Date().toISOString() }); }
+  function syncNutriJournal(id) { var a = localNutriAudit(id); if (a && a.consent) return pushNutriJournal(id); return Promise.resolve(); }
+  function loadNutriJournal(id) { return cloudGet(id + "-nutrijournal").then(function (r) { return r ? r.journal : null; }).catch(function () { return null; }); }
+
+  function nutriRadio(qdef, current, onPick) {
+    var wrap = document.createElement("div"); wrap.style.cssText = "margin-bottom:14px";
+    var l = document.createElement("div"); l.style.cssText = "font-size:12px;font-weight:600;margin-bottom:7px;color:" + C.text; l.textContent = qdef.q; wrap.appendChild(l);
+    var row = document.createElement("div"); row.style.cssText = "display:flex;flex-wrap:wrap;gap:6px";
+    function render(sel) { row.innerHTML = ""; qdef.opts.forEach(function (opt) { var on = sel === opt; var b = document.createElement("button"); b.textContent = opt; b.style.cssText = "padding:8px 12px;border-radius:18px;border:" + (on ? "1.5px solid " + C.gold : "1px solid " + C.border) + ";background:" + (on ? C.gold : "transparent") + ";color:" + (on ? C.bg : C.text) + ";font-size:12px;font-weight:" + (on ? 700 : 500) + ";cursor:pointer"; b.onclick = function () { onPick(opt); render(opt); }; row.appendChild(b); }); }
+    render(current); wrap.appendChild(row); return wrap;
+  }
+  function nutriText(qdef, current, onInput) {
+    var wrap = document.createElement("div"); wrap.style.cssText = "margin-bottom:14px";
+    var l = document.createElement("div"); l.style.cssText = "font-size:12px;font-weight:600;margin-bottom:7px;color:" + C.text; l.textContent = qdef.q; wrap.appendChild(l);
+    var ta = document.createElement("textarea"); ta.value = current || ""; ta.placeholder = qdef.ph || ""; ta.rows = 2; ta.style.cssText = "width:100%;box-sizing:border-box;padding:10px;border-radius:10px;border:1px solid " + C.border + ";background:" + C.surf + ";color:" + C.text + ";font:inherit;resize:vertical"; ta.oninput = function () { onInput(ta.value); }; wrap.appendChild(ta); return wrap;
+  }
+
+  function openNutritionAudit(id, back) {
+    var box = overlay(); header(box, "🥗 Audit nutrition", back);
+    var body = document.createElement("div"); body.innerHTML = '<div style="color:' + C.dim + '">Chargement…</div>'; box.appendChild(body);
+    loadNutriAudit(id).then(function (a) {
+      var ans = Object.assign({}, a.answers || {}), consentState = !!a.consent;
+      body.innerHTML = "";
+      var intro = document.createElement("div"); intro.style.cssText = "font-size:12px;color:" + C.dim + ";margin-bottom:14px"; intro.textContent = "Ces réponses aident ton coach à comprendre tes habitudes alimentaires et à mieux t'accompagner."; body.appendChild(intro);
+      NUTRI_Q.forEach(function (q) { body.appendChild(nutriRadio(q, ans[q.k], function (v) { ans[q.k] = v; })); });
+      NUTRI_TEXT.forEach(function (q) { body.appendChild(nutriText(q, ans[q.k], function (v) { ans[q.k] = v; })); });
+
+      var cBox = document.createElement("div"); cBox.style.cssText = "background:" + C.card + ";border:1px solid " + C.gold + "55;border-radius:12px;padding:12px;margin:6px 0 14px;display:flex;gap:12px;align-items:flex-start;cursor:pointer";
+      var sw = document.createElement("div");
+      function drawSw() { sw.style.cssText = "width:44px;height:25px;border-radius:14px;flex-shrink:0;position:relative;background:" + (consentState ? C.ok : C.border); sw.innerHTML = '<div style="position:absolute;top:2px;left:' + (consentState ? "21px" : "2px") + ';width:21px;height:21px;border-radius:50%;background:#fff;transition:left .15s"></div>'; }
+      drawSw();
+      var ctxt = document.createElement("div"); ctxt.innerHTML = '<div style="font-size:12px;font-weight:700;color:' + C.text + '">J\'autorise mon coach à consulter mon journal alimentaire</div><div style="font-size:11px;color:' + C.dim + ';margin-top:3px">Ton journal de l\'app sera partagé avec ton coach. Tu peux le désactiver à tout moment.</div>';
+      cBox.onclick = function () { consentState = !consentState; drawSw(); };
+      cBox.appendChild(sw); cBox.appendChild(ctxt); body.appendChild(cBox);
+
+      var save = document.createElement("button"); save.textContent = "Enregistrer mon audit"; save.style.cssText = "width:100%;padding:12px;border:none;border-radius:10px;background:" + C.gold + ";color:" + C.bg + ";font-weight:800;cursor:pointer";
+      var okMsg = document.createElement("div"); okMsg.style.cssText = "text-align:center;font-size:12px;color:" + C.ok + ";margin-top:8px;height:16px";
+      save.onclick = function () {
+        saveNutriAudit(id, { answers: ans, consent: consentState }).then(function () {
+          (consentState ? pushNutriJournal(id) : clearNutriJournal(id));
+          okMsg.textContent = consentState ? "✓ Audit enregistré · journal partagé" : "✓ Audit enregistré · journal non partagé";
+        });
+      };
+      body.appendChild(save); body.appendChild(okMsg);
+    }).catch(function () { body.innerHTML = '<div style="color:#E07060">Erreur de chargement.</div>'; });
+  }
+
+  function renderJournal(j) {
+    var meals = ["Petit-déjeuner", "Déjeuner", "Dîner", "Collation"];
+    var all = []; if (j && typeof j === "object") Object.keys(j).forEach(function (k) { if (Array.isArray(j[k])) all = all.concat(j[k]); });
+    var tot = all.reduce(function (a, x) { a.kcal += x.kcal || 0; a.p += x.p || 0; a.g += x.g || 0; a.l += x.l || 0; return a; }, { kcal: 0, p: 0, g: 0, l: 0 });
+    var h = '<div style="background:' + C.card + ';border:1px solid ' + C.border + ';border-radius:12px;padding:12px"><div style="font-size:11px;color:' + C.dim + ';margin-bottom:8px">📋 Journal alimentaire partagé</div>';
+    h += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">' + chip("🔥", Math.round(tot.kcal), "kcal") + chip("Prot.", Math.round(tot.p) + "g", "") + chip("Gluc.", Math.round(tot.g) + "g", "") + chip("Lip.", Math.round(tot.l) + "g", "") + '</div>';
+    meals.forEach(function (m) { var items = (j && j[m]) || []; if (!items.length) return; h += '<div style="font-size:12px;font-weight:700;color:' + C.gold + ';margin:8px 0 4px">' + m + '</div>'; items.forEach(function (x) { var nom = x.nom || x.name || x.libelle || "Aliment"; h += '<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:1px solid ' + C.border + '"><span>' + String(nom).replace(/</g, "&lt;") + '</span><span style="color:' + C.dim + '">' + (x.kcal || 0) + ' kcal</span></div>'; }); });
+    if (!all.length) h += '<div style="font-size:12px;color:' + C.dim + '">Journal vide pour le moment.</div>';
+    return h + '</div>';
+  }
+  function coachNutritionSection(id, container) {
+    if (!container) return;
+    container.innerHTML = '<div style="font-size:12px;color:' + C.dim + '">Chargement nutrition…</div>';
+    Promise.all([loadNutriAudit(id), loadNutriJournal(id)]).then(function (res) {
+      var a = res[0] || { answers: {}, consent: false }, journal = res[1], ans = a.answers || {};
+      var html = '<div style="font-size:12px;font-weight:800;color:' + C.gold + ';margin-bottom:10px">🥗 Nutrition</div>';
+      var rows = [];
+      NUTRI_Q.forEach(function (q) { if (ans[q.k]) rows.push([q.q, ans[q.k]]); });
+      NUTRI_TEXT.forEach(function (q) { if (ans[q.k]) rows.push([q.q, ans[q.k]]); });
+      if (rows.length) html += '<div style="background:' + C.card + ';border:1px solid ' + C.border + ';border-radius:12px;padding:12px;margin-bottom:10px">' + rows.map(function (r) { return '<div style="margin-bottom:8px"><div style="font-size:10px;color:' + C.dim + '">' + r[0] + '</div><div style="font-size:12px;color:' + C.text + '">' + String(r[1]).replace(/</g, "&lt;") + '</div></div>'; }).join("") + '</div>';
+      else html += '<div style="font-size:12px;color:' + C.dim + ';margin-bottom:10px">Audit non encore rempli par la cliente.</div>';
+      if (a.consent && journal) html += renderJournal(journal);
+      else html += '<div style="background:' + C.card + ';border:1px dashed ' + C.border + ';border-radius:12px;padding:12px;font-size:12px;color:' + C.dim + '">🔒 Journal alimentaire non partagé (consentement non donné par la cliente).</div>';
+      container.innerHTML = html;
+    }).catch(function () { container.innerHTML = '<div style="color:#E07060;font-size:12px">Erreur nutrition.</div>'; });
+  }
+  /* ===================== Mesures & évolution (jour/semaine/mois) v11 ===================== */
+  function lastValue(measures, k) { for (var i = measures.length - 1; i >= 0; i--) { if (measures[i][k] != null) return measures[i][k]; } return "–"; }
+  function aggregate(measures, k, period) {
+    var pts = measures.filter(function (m) { return m[k] != null; }).map(function (m) { return { d: new Date(m.date || m.ts), v: +m[k] }; });
+    function bk(d) { if (period === "mois") return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0"); if (period === "semaine") { var o = new Date(d.getFullYear(), 0, 1); var w = Math.ceil((((d - o) / 86400000) + o.getDay() + 1) / 7); return d.getFullYear() + "-S" + w; } return d.toISOString().split("T")[0]; }
+    var b = {}; pts.forEach(function (p) { var key = bk(p.d); (b[key] = b[key] || []).push(p.v); });
+    var keys = Object.keys(b).sort(); var N = period === "mois" ? 12 : period === "semaine" ? 12 : 14; keys = keys.slice(-N);
+    return keys.map(function (key) { var a = b[key]; return { label: key, value: Math.round(a.reduce(function (x, y) { return x + y; }, 0) / a.length * 10) / 10 }; });
+  }
+  function svgLineLabeled(vals, col) {
+    var W = 300, Hh = 80, max = Math.max.apply(null, vals), min = Math.min.apply(null, vals), rng = (max - min) || 1;
+    var pts = vals.map(function (v, i) { var x = vals.length > 1 ? i / (vals.length - 1) * W : 0, y = Hh - 10 - ((v - min) / rng) * (Hh - 20); return [x, y]; });
+    var line = pts.map(function (p) { return p[0].toFixed(1) + "," + p[1].toFixed(1); }).join(" ");
+    var dots = pts.map(function (p) { return '<circle cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="2.5" fill="' + col + '"/>'; }).join("");
+    var lp = pts[pts.length - 1];
+    return '<svg viewBox="0 0 ' + W + ' ' + Hh + '" width="100%" height="' + Hh + '"><polygon points="0,' + Hh + ' ' + line + ' ' + W + ',' + Hh + '" fill="' + col + '18"/><polyline points="' + line + '" fill="none" stroke="' + col + '" stroke-width="2"/>' + dots + '<circle cx="' + lp[0].toFixed(1) + '" cy="' + lp[1].toFixed(1) + '" r="4" fill="' + col + '"/></svg>';
+  }
+  function measureChart(measures, f, period) {
+    var data = aggregate(measures, f.k, period);
+    if (data.length < 2) return '<div style="font-size:12px;color:' + C.dim + ';padding:8px 0">Pas encore assez de points pour l\'évolution ' + (period === "jour" ? "journalière" : period === "semaine" ? "hebdomadaire" : "mensuelle") + '. Continue à scanner régulièrement.</div>';
+    var vals = data.map(function (x) { return x.value; }), min = Math.min.apply(null, vals), max = Math.max.apply(null, vals);
+    var first = vals[0], last = vals[vals.length - 1], delta = Math.round((last - first) * 10) / 10;
+    var trend = delta > 0 ? ("▲ +" + delta) : delta < 0 ? ("▼ " + delta) : "→ stable";
+    var good = (delta === 0) ? C.dim : (f.low ? (delta < 0 ? C.ok : "#E07060") : (delta > 0 ? C.ok : "#E07060"));
+    return '<div>' + svgLineLabeled(vals, f.col || C.gold) + '<div style="display:flex;justify-content:space-between;font-size:11px;color:' + C.dim + ';margin-top:6px"><span>min ' + min + '</span><span style="color:' + good + ';font-weight:700">' + trend + (f.unit ? (" " + f.unit) : "") + '</span><span>max ' + max + '</span></div></div>';
+  }
+  function openMeasures(id, back) {
+    var box = overlay(); header(box, "📊 Mesures & évolution", back);
+    var body = document.createElement("div"); body.innerHTML = '<div style="color:' + C.dim + '">Chargement…</div>'; box.appendChild(body);
+    loadScans(id).then(function (measures) {
+      body.innerHTML = "";
+      if (!measures || !measures.length) { body.innerHTML = '<div style="font-size:13px;color:' + C.dim + '">Aucune mesure pour le moment. Scanne une mesure pour démarrer le suivi.</div>'; return; }
+      var present = SCAN_FIELDS.filter(function (f) { return measures.some(function (m) { return m[f.k] != null; }); });
+      var info = document.createElement("div"); info.style.cssText = "font-size:11px;color:" + C.dim + ";margin-bottom:12px"; info.textContent = "Appuie sur une mesure (＋) pour voir son évolution : jour / semaine / mois."; body.appendChild(info);
+      present.forEach(function (f) {
+        var last = lastValue(measures, f.k);
+        var d = document.createElement("details"); d.style.cssText = "background:" + C.card + ";border:1px solid " + C.border + ";border-radius:12px;margin-bottom:8px;overflow:hidden";
+        var sum = document.createElement("summary"); sum.style.cssText = "list-style:none;cursor:pointer;padding:12px;display:flex;align-items:center;gap:8px;font-size:13px";
+        sum.innerHTML = '<span style="font-size:16px">' + f.emoji + '</span><span style="flex:1;font-weight:600">' + f.label + '</span><span style="font-weight:800;color:' + (f.col || C.gold) + '">' + last + (f.unit ? (" " + f.unit) : "") + '</span><span style="color:' + C.dim + ';font-size:15px">＋</span>';
+        d.appendChild(sum);
+        var cont = document.createElement("div"); cont.style.cssText = "padding:0 12px 12px";
+        var period = "jour";
+        var tg = document.createElement("div"); tg.style.cssText = "display:flex;gap:6px;margin-bottom:8px";
+        var chartH = document.createElement("div");
+        function drawChart() { chartH.innerHTML = measureChart(measures, f, period); }
+        ["jour", "semaine", "mois"].forEach(function (p) {
+          var btn = document.createElement("button"); btn.textContent = p.charAt(0).toUpperCase() + p.slice(1);
+          function style() { var on = period === p; btn.style.cssText = "flex:1;padding:7px;border-radius:8px;border:" + (on ? "1.5px solid " + C.gold : "1px solid " + C.border) + ";background:" + (on ? C.gold : "transparent") + ";color:" + (on ? C.bg : C.text) + ";font-size:11px;font-weight:" + (on ? 700 : 500) + ";cursor:pointer"; }
+          style(); btn.__upd = style;
+          btn.onclick = function () { period = p; Array.prototype.forEach.call(tg.children, function (c) { if (c.__upd) c.__upd(); }); drawChart(); };
+          tg.appendChild(btn);
+        });
+        cont.appendChild(tg); cont.appendChild(chartH); d.appendChild(cont);
+        d.addEventListener("toggle", function () { if (d.open) drawChart(); });
+        body.appendChild(d);
+      });
+    }).catch(function () { body.innerHTML = '<div style="color:#E07060">Erreur de chargement.</div>'; });
   }
 })();
 </script>
