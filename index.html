@@ -407,7 +407,7 @@ react-dom/cjs/react-dom-client.production.js:
   }
 
   /* ===== Boucles + reset quotidien ===== */
-  function tick() { var s = session(); if (!s) return; if (s.role === "client" && s.clientId) { syncErgo(s.clientId); syncTasks(s.clientId); } }
+  function tick() { var s = session(); if (!s) return; if (s.role === "client" && s.clientId) { syncErgo(s.clientId); syncTasks(s.clientId); syncEffort(s.clientId); } }
   window.addEventListener("load", function () { setTimeout(tick, 4000); });
   setInterval(tick, 60000);
   var seenDay = today(), pendingReload = false;
@@ -537,14 +537,14 @@ react-dom/cjs/react-dom-client.production.js:
   function buildToday() {
     var clients = coachClients();
     return Promise.all(clients.map(function (c) {
-      return Promise.all([cloudGet(c.id + "-ergolive"), cloudGet(c.id + "-taskcount"), cloudGet(c.id + "-targets")]).then(function (res) {
-        var live = res[0] || {}, tc = res[1] || {}, tg = res[2] || {}, t = today();
+      return Promise.all([cloudGet(c.id + "-ergolive"), cloudGet(c.id + "-taskcount"), cloudGet(c.id + "-targets"), cloudGet(c.id + "-effort")]).then(function (res) {
+        var live = res[0] || {}, tc = res[1] || {}, tg = res[2] || {}, ef = res[3] || {}, t = today();
         var lv = live.ergoLive && live.ergoLive.date === t ? live.ergoLive : null, cv = live.chronoLive && live.chronoLive.date === t ? live.chronoLive : null;
         var ram = lv ? (lv.squat || 0) + (lv.hinge || 0) + (lv.fente || 0) : 0, etg = lv ? (lv.etages || 0) : 0, chr = cv ? (cv.base || 0) : 0;
         var taskDay = (tc.days || {})[t] || {}, taskTot = Object.keys(taskDay).reduce(function (s, k) { return s + (taskDay[k] || 0); }, 0);
         var prog = c.programme || [], taskDetail = Object.keys(taskDay).map(function (tid) { var ex = prog.filter(function (p) { return p.id === tid; })[0]; return { titre: ex ? ex.titre : "Tâche", n: taskDay[tid] }; }).filter(function (x) { return x.n > 0; });
         var objs = c.petitsObjectifs || [], objDone = objs.filter(function (o) { return (o.validations || []).indexOf(t) > -1; }).length;
-        return { id: c.id, nom: c.nom, ram: ram, etg: etg, chr: chr, taskTot: taskTot, taskDetail: taskDetail, objDone: objDone, objTot: objs.length, ramObj: num(tg.ram), basale: num(tg.basale), active: ram > 0 || etg > 0 || chr > 0 || taskTot > 0 || objDone > 0 };
+        return { id: c.id, nom: c.nom, ram: ram, etg: etg, chr: chr, taskTot: taskTot, taskDetail: taskDetail, objDone: objDone, objTot: objs.length, ramObj: num(tg.ram), basale: num(tg.basale), effort: (((ef.days || {})[t] || {}).__jour || 0), active: ram > 0 || etg > 0 || chr > 0 || taskTot > 0 || objDone > 0 };
       });
     }));
   }
@@ -555,7 +555,7 @@ react-dom/cjs/react-dom-client.production.js:
       var act = rows.filter(function (r) { return r.active; });
       var html = '<div style="background:' + C.card + ';border:1px solid ' + C.border + ';border-radius:12px;padding:12px;margin-bottom:14px"><div style="font-size:12px;font-weight:800;color:' + C.gold + '">Aujourd\'hui — ' + act.length + ' active' + (act.length > 1 ? 's' : '') + ' / ' + rows.length + '</div>';
       if (!act.length) html += '<div style="font-size:12px;color:' + C.dim + ';margin-top:6px">Personne n\'a encore bougé aujourd\'hui.</div>';
-      act.forEach(function (r) { var b = []; if (r.ramObj > 0) b.push("💪 " + r.ram + "/" + r.ramObj + " ram."); else if (r.ram) b.push("💪 " + r.ram + " ram."); if (r.etg) b.push("🪜 " + r.etg); if (r.chr) b.push("⏱ " + fmtTime(r.chr)); if (r.objDone) b.push("🎯 " + r.objDone + "/" + r.objTot); if (r.taskTot) b.push("🧮 " + r.taskTot); var det = r.taskDetail.length ? ('<div style="font-size:10.5px;color:' + C.dim + ';margin-top:2px">' + r.taskDetail.map(function (d) { return d.titre + " ×" + d.n; }).join(" · ") + '</div>') : ''; html += '<div style="margin-top:10px;padding-top:10px;border-top:1px solid ' + C.border + '"><div style="font-weight:700;font-size:13px">' + (r.nom || r.id) + '</div><div style="font-size:11.5px;margin-top:2px">' + (b.join(" · ") || "—") + '</div>' + det + '</div>'; });
+      act.forEach(function (r) { var b = []; if (r.ramObj > 0) b.push("💪 " + r.ram + "/" + r.ramObj + " ram."); else if (r.ram) b.push("💪 " + r.ram + " ram."); if (r.etg) b.push("🪜 " + r.etg); if (r.chr) b.push("⏱ " + fmtTime(r.chr)); if (r.objDone) b.push("🎯 " + r.objDone + "/" + r.objTot); if (r.taskTot) b.push("🧮 " + r.taskTot); if (r.effort) b.push('<span style="color:' + EFFORT[r.effort - 1].c + ';font-weight:700">🔥 ' + EFFORT[r.effort - 1].label + '</span>'); var det = r.taskDetail.length ? ('<div style="font-size:10.5px;color:' + C.dim + ';margin-top:2px">' + r.taskDetail.map(function (d) { return d.titre + " ×" + d.n; }).join(" · ") + '</div>') : ''; html += '<div style="margin-top:10px;padding-top:10px;border-top:1px solid ' + C.border + '"><div style="font-weight:700;font-size:13px">' + (r.nom || r.id) + '</div><div style="font-size:11.5px;margin-top:2px">' + (b.join(" · ") || "—") + '</div>' + det + '</div>'; });
       html += '</div><label style="font-size:11px;color:' + C.dim + ';text-transform:uppercase;letter-spacing:.06em">Cliente</label><select id="exh-sel" style="width:100%;margin:6px 0 12px;padding:10px 12px;border-radius:10px;background:' + C.surf + ';color:' + C.text + ';border:1px solid ' + C.border + ';font:inherit"><option value="">— Choisir —</option>' + coachClients().map(function (c) { return '<option value="' + c.id + '">' + (c.nom || c.id) + '</option>'; }).join("") + '</select><div id="exh-detail"></div>';
       body.innerHTML = html;
       body.querySelector("#exh-sel").onchange = function () { renderDetail(this.value, body.querySelector("#exh-detail")); };
@@ -612,8 +612,8 @@ react-dom/cjs/react-dom-client.production.js:
     var box = overlay(); header(box, "✦ Mon tableau de bord");
     var c = findClient(id) || {}, prenom = (c.nom || "").split(" ")[0] || "";
     var body = document.createElement("div"); body.innerHTML = '<div style="color:' + C.dim + '">Chargement…</div>'; box.appendChild(body);
-    Promise.all([loadTargets(id), loadScans(id)]).then(function (res) {
-      var tg = res[0] || { ram: 0, basale: 0 }, measures = res[1] || [];
+    Promise.all([loadTargets(id), loadScans(id), loadEffort(id)]).then(function (res) {
+      var tg = res[0] || { ram: 0, basale: 0 }, measures = res[1] || [], effortDays = res[2] || {};
       var jours = ((c.joursReussis) || []).length, bt = belt(jours), ram = todayRam(id);
       var week = ergoSeries(id, 7), month = ergoSeries(id, 30), mv = month.map(function (x) { return x.value; }), monthTot = mv.reduce(function (a, b) { return a + b; }, 0);
       var poidsPts = measures.filter(function (m) { return m.poids != null; }).map(function (m) { return m.poids; });
@@ -624,6 +624,7 @@ react-dom/cjs/react-dom-client.production.js:
       html += '<div style="background:' + C.card + ';border:1px solid ' + C.border + ';border-radius:14px;padding:14px;margin-bottom:12px"><div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-size:12px;font-weight:700">🗓 30 derniers jours</span><span style="font-size:12px;color:' + C.gold + ';font-weight:800">' + monthTot + ' <span style="font-size:10px;color:' + C.dim + '">ramassages</span></span></div>' + svgLine(mv) + '</div>';
       if (lastM) { var mc = SCAN_FIELDS.filter(function(f){return lastM[f.k]!=null;}).map(function(f){return chip(f.emoji,lastM[f.k],f.unit);}); html += '<div style="background:' + C.card + ';border:1px solid ' + C.border + ';border-radius:14px;padding:14px;margin-bottom:12px"><div style="font-size:12px;font-weight:700;margin-bottom:8px">⚖️ Mes mesures</div>' + (poidsPts.length > 1 ? svgLine(poidsPts) : '') + '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">' + mc.join("") + '</div></div>'; }
       body.innerHTML = html;
+      body.appendChild(buildEffortCard(id, effortDays));
       progAccordion(body, id);
       var grid = document.createElement("div"); grid.style.cssText = "display:grid;grid-template-columns:1fr;gap:10px;margin-top:6px";
       addTile(grid, "📷", "Scanner une mesure (poids, masse grasse…)", function () { openScan(id, function () { openClientDash(id); }); });
@@ -740,7 +741,7 @@ react-dom/cjs/react-dom-client.production.js:
       plus.onclick = function (e) { e.preventDefault(); refresh(bumpTask(id, ex.id, 1)); };
       minus.onclick = function (e) { e.preventDefault(); refresh(bumpTask(id, ex.id, -1)); };
       ctr.appendChild(lab); ctr.appendChild(minus); ctr.appendChild(numEl); ctr.appendChild(plus);
-      b2.appendChild(ctr); d.appendChild(b2); sec.appendChild(d);
+      b2.appendChild(ctr); var __eff = (localEffort(id)[today()] || {})[ex.id] || 0; b2.appendChild(miniEffortRow(id, ex.id, __eff)); d.appendChild(b2); sec.appendChild(d);
     });
     container.appendChild(sec);
   }
@@ -751,6 +752,53 @@ react-dom/cjs/react-dom-client.production.js:
     var flag = "exhome_dash_auto_" + s.clientId;
     try { if (sessionStorage.getItem(flag)) return; sessionStorage.setItem(flag, "1"); } catch (e) {}
     openClientDash(s.clientId);
+  }
+  /* ===================== Ressenti d'effort (RPE) v9 ===================== */
+  var EFFORT = [
+    { lvl: 1, label: "Très léger", c: "#6FCF97" },
+    { lvl: 2, label: "Léger", c: "#A8C84A" },
+    { lvl: 3, label: "Modéré", c: "#E8C84A" },
+    { lvl: 4, label: "Soutenu", c: "#E0852E" },
+    { lvl: 5, label: "Intense", c: "#D9534F" }
+  ];
+  function localEffort(id) { return rLS("exhome_effort_" + id) || {}; }
+  function saveEffort(id, o) { wLS("exhome_effort_" + id, o); }
+  function mergeEffortFill(remote, local) { var out = {}; [remote, local].forEach(function (o) { if (o) Object.keys(o).forEach(function (d) { out[d] = out[d] || {}; var s = o[d] || {}; Object.keys(s).forEach(function (k) { out[d][k] = s[k]; }); }); }); return out; }
+  var effortTimers = {};
+  function pushEffort(id) { var local = localEffort(id); cloudGet(id + "-effort").then(function (r) { var remote = (r && r.days) || {}; var m = mergeEffortFill(remote, local); saveEffort(id, m); cloudPut(id + "-effort", { days: m, updatedAt: new Date().toISOString() }); }).catch(function () {}); }
+  function scheduleEffortPush(id) { clearTimeout(effortTimers[id]); effortTimers[id] = setTimeout(function () { pushEffort(id); }, 1500); }
+  function setEffort(id, key, lvl) { var t = today(), o = localEffort(id); o[t] = o[t] || {}; o[t][key] = lvl; saveEffort(id, o); scheduleEffortPush(id); }
+  function syncEffort(id) { if (!id) return Promise.resolve(); var local = localEffort(id); return cloudGet(id + "-effort").then(function (r) { var remote = (r && r.days) || {}; var m = mergeEffortFill(remote, local); saveEffort(id, m); return cloudPut(id + "-effort", { days: m, updatedAt: new Date().toISOString() }); }).catch(function () {}); }
+  function loadEffort(id) { return cloudGet(id + "-effort").then(function (r) { var days = (r && r.days) || localEffort(id); if (r) saveEffort(id, days); return days; }).catch(function () { return localEffort(id); }); }
+
+  function effortRing(lvl) {
+    var it = lvl ? EFFORT[lvl - 1] : null, pct = lvl ? lvl / 5 * 100 : 0, col = it ? it.c : C.border;
+    var r = 40, c = 2 * Math.PI * r, off = c * (1 - pct / 100);
+    return '<svg viewBox="0 0 110 110" width="100" height="100" style="flex-shrink:0"><circle cx="55" cy="55" r="' + r + '" fill="none" stroke="' + C.border + '" stroke-width="10"/>' +
+      (lvl ? '<circle cx="55" cy="55" r="' + r + '" fill="none" stroke="' + col + '" stroke-width="10" stroke-linecap="round" stroke-dasharray="' + c.toFixed(1) + '" stroke-dashoffset="' + off.toFixed(1) + '" transform="rotate(-90 55 55)"/>' : '') +
+      '<text x="55" y="52" font-size="30" font-weight="800" fill="' + (lvl ? col : C.dim) + '" text-anchor="middle">' + (lvl || "–") + '</text><text x="55" y="70" font-size="9" fill="' + C.dim + '" text-anchor="middle">sur 5</text></svg>';
+  }
+  function buildEffortCard(id, days) {
+    var key = "__jour", cur = (days[today()] || {})[key] || 0;
+    var card = document.createElement("div"); card.style.cssText = "background:" + C.card + ";border:1px solid " + C.border + ";border-radius:14px;padding:14px;margin-bottom:12px";
+    card.innerHTML = '<div style="font-size:12px;font-weight:700;margin-bottom:4px">🔥 Ton ressenti d\'effort du jour</div><div style="font-size:11px;color:' + C.dim + ';margin-bottom:10px">Comment l\'effort t\'a paru aujourd\'hui ?</div>';
+    var inner = document.createElement("div"); inner.style.cssText = "display:flex;align-items:center;gap:14px";
+    var ringH = document.createElement("div"); ringH.innerHTML = effortRing(cur);
+    var right = document.createElement("div"); right.style.cssText = "flex:1;min-width:0";
+    var lab = document.createElement("div"); lab.style.cssText = "font-size:14px;font-weight:800;margin-bottom:8px;min-height:19px;color:" + (cur ? EFFORT[cur - 1].c : C.dim); lab.textContent = cur ? EFFORT[cur - 1].label : "Pas encore évalué";
+    var scale = document.createElement("div"); scale.style.cssText = "display:flex;gap:6px";
+    function render(sel) { scale.innerHTML = ""; EFFORT.forEach(function (e) { var on = sel === e.lvl; var b = document.createElement("button"); b.style.cssText = "flex:1;height:" + (on ? "38px" : "30px") + ";border-radius:9px;border:" + (on ? "2px solid " + C.text : "1px solid " + C.border) + ";background:" + e.c + (on ? "" : "88") + ";cursor:pointer;transition:all .15s"; b.title = e.label; b.onclick = function () { setEffort(id, key, e.lvl); ringH.innerHTML = effortRing(e.lvl); lab.textContent = e.label; lab.style.color = e.c; render(e.lvl); }; scale.appendChild(b); }); }
+    render(cur);
+    right.appendChild(lab); right.appendChild(scale); inner.appendChild(ringH); inner.appendChild(right); card.appendChild(inner);
+    return card;
+  }
+  function miniEffortRow(id, exKey, current) {
+    var row = document.createElement("div"); row.style.cssText = "margin-top:12px";
+    var l = document.createElement("div"); l.style.cssText = "font-size:11px;color:" + C.dim + ";margin-bottom:5px"; l.textContent = current ? ("Ressenti d'effort : " + EFFORT[current - 1].label) : "Ressenti d'effort";
+    var seg = document.createElement("div"); seg.style.cssText = "display:flex;gap:5px";
+    function render(sel) { seg.innerHTML = ""; EFFORT.forEach(function (e) { var on = sel === e.lvl; var b = document.createElement("button"); b.style.cssText = "flex:1;height:" + (on ? "26px" : "20px") + ";border-radius:7px;border:" + (on ? "2px solid " + C.text : "1px solid " + C.border) + ";background:" + e.c + (on ? "" : "77") + ";cursor:pointer"; b.title = e.label; b.onclick = function (ev) { ev.preventDefault(); setEffort(id, exKey, e.lvl); l.textContent = "Ressenti d'effort : " + e.label; render(e.lvl); }; seg.appendChild(b); }); }
+    render(current);
+    row.appendChild(l); row.appendChild(seg); return row;
   }
 })();
 </script>
