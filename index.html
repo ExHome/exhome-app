@@ -1167,50 +1167,32 @@ react-dom/cjs/react-dom-client.production.js:
     box.appendChild(sub);
     var mob = window.innerWidth < 560;
     var grid = document.createElement("div"); grid.style.cssText = "display:grid;grid-template-columns:repeat(auto-fill,minmax(" + (mob ? 104 : 94) + "px,1fr));gap:" + (mob ? 16 : 14) + "px";
-    function nat(ic, label, word) { return { ic: ic, label: label, fn: function () { var o = document.getElementById("exh-ov"); if (o) o.remove(); if (!clickNativeTab(word)) exhToast("Ouvre d'abord une cliente pour \u00ab " + label + " \u00bb."); } }; }
+    function nat(emoji, label, word) { return { emoji: emoji, label: label, fn: function () { var o = document.getElementById("exh-ov"); if (o) o.remove(); if (!clickNativeTab(word)) exhToast("Ouvre d'abord une cliente pour \u00ab " + label + " \u00bb."); } }; }
     function needId(opener) { return function () { var id = targetClientId(); if (id) opener(id); else if (coach) openCoach(); else exhToast("Section indisponible ici."); }; }
-    var ICONS = {
-      compass: '<circle cx="12" cy="12" r="9"/><polygon points="15.5,8.5 11,11 8.5,15.5 13,13" fill="#E0852E" stroke="#E0852E"/>',
-      dash: '<rect x="3.5" y="12" width="4" height="8" rx="1"/><rect x="10" y="8" width="4" height="12" rx="1"/><rect x="16.5" y="4" width="4" height="16" rx="1" fill="#E0852E" stroke="#E0852E"/>',
-      user: '<circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/>',
-      list: '<rect x="5" y="3.5" width="14" height="17" rx="2"/><path d="M9.5 3.5V2.5h5v1"/><line x1="8.5" y1="10" x2="15.5" y2="10"/><line x1="8.5" y1="14" x2="13.5" y2="14"/>',
-      timer: '<circle cx="12" cy="13.5" r="7"/><line x1="12" y1="13.5" x2="12" y2="9.5"/><line x1="10" y1="3" x2="14" y2="3"/><line x1="12" y1="3" x2="12" y2="6.5"/>',
-      target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.7" fill="#E0852E" stroke="#E0852E"/>',
-      chart: '<path d="M4 4v16h16"/><polyline points="6,16 10,12 13,14.5 20,7"/><circle cx="20" cy="7" r="1.7" fill="#E0852E" stroke="#E0852E"/>',
-      camera: '<rect x="3" y="7" width="18" height="13" rx="2.5"/><circle cx="12" cy="13.5" r="3.5"/><path d="M8.5 7l1.2-2.2h4.6L15.5 7"/>',
-      heart: '<path d="M12 20s-7-4.3-7-9.3a3.8 3.8 0 0 1 7-2.2 3.8 3.8 0 0 1 7 2.2C19 15.7 12 20 12 20z" fill="rgba(224,133,46,.22)"/>',
-      food: '<line x1="8" y1="7" x2="8" y2="21"/><path d="M6 3v3.8M10 3v3.8M6 6.8c0 1.1.9 2 2 2s2-.9 2-2"/><path d="M16.5 3c-1.4 0-2.2 1.7-2.2 4.2s.8 3.4 2.2 3.4v10.4"/>',
-      doc: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8.5 12.5l2.2 2.2 4-4.2" stroke="#E0852E"/>',
-      drop: '<path d="M12 3.2s6 6.3 6 10.3a6 6 0 0 1-12 0C6 9.5 12 3.2 12 3.2z"/><path d="M9.3 14.2a2.7 2.7 0 0 0 2.7 2.7" stroke="#E0852E"/>',
-      calendar: '<rect x="4" y="5" width="16" height="16" rx="2.5"/><line x1="4" y1="9.5" x2="20" y2="9.5"/><line x1="9" y1="3" x2="9" y2="6"/><line x1="15" y1="3" x2="15" y2="6"/><circle cx="12" cy="14.5" r="1.6" fill="#E0852E" stroke="#E0852E"/>',
-      chat: '<path d="M5 5.5h14a1.5 1.5 0 0 1 1.5 1.5v8a1.5 1.5 0 0 1-1.5 1.5H10l-4.5 4V7a1.5 1.5 0 0 1 1.5-1.5z"/>',
-      search: '<circle cx="11" cy="11" r="6"/><line x1="15.5" y1="15.5" x2="20" y2="20"/>',
-      grid: '<rect x="3.5" y="4" width="7.5" height="7" rx="1.5"/><rect x="13" y="4" width="7.5" height="7" rx="1.5"/><rect x="3.5" y="13" width="7.5" height="7" rx="1.5"/><rect x="13" y="13" width="7.5" height="7" rx="1.5" fill="rgba(224,133,46,.25)"/>'
-    };
     var tiles = [
-      { ic: "compass", label: "Rep\u00e8res", fn: function () { openGuide(); } },
-      { ic: "dash", label: "Tableau de bord", fn: function () { openDashboard(); } },
-      { ic: "user", label: "Profil", fn: needId(openProfil) },
-      nat("list", "Programme", "Programme"),
-      nat("timer", "Compteur ergo", "Compteur"),
-      nat("target", "Objectifs", "Objectifs"),
-      { ic: "chart", label: "Mesures", fn: needId(openMeasures) },
-      { ic: "camera", label: "Scan balance", fn: needId(openScan) },
-      nat("heart", "Sant\u00e9", "Sant\u00e9"),
-      nat("food", "Nutrition (repas)", "Nutrition"),
-      { ic: "doc", label: "Bilan nutritionnel", fn: needId(openNutritionAudit) },
-      nat("drop", "Hydratation", "Hydratation"),
-      nat("calendar", "S\u00e9ances", "S\u00e9ances"),
-      nat("chat", "Messages", "Messages")
+      { emoji: "❓", label: "Repères", fn: function () { openGuide(); } },
+      { emoji: "📊", label: "Tableau de bord", fn: function () { openDashboard(); } },
+      { emoji: "👤", label: "Profil", fn: needId(openProfil) },
+      nat("📋", "Programme", "Programme"),
+      nat("🏠", "Compteur ergo", "Compteur"),
+      nat("🎯", "Objectifs", "Objectifs"),
+      { emoji: "📈", label: "Mesures", fn: needId(openMeasures) },
+      { emoji: "📷", label: "Scan balance", fn: needId(openScan) },
+      nat("❤️", "Santé", "Santé"),
+      nat("🍽️", "Nutrition (repas)", "Nutrition"),
+      { emoji: "📝", label: "Bilan nutritionnel", fn: needId(openNutritionAudit) },
+      nat("💧", "Hydratation", "Hydratation"),
+      nat("📅", "Séances", "Séances"),
+      nat("💬", "Messages", "Messages")
     ];
-    if (coach) { tiles.push(nat("search", "Audit", "Audit")); tiles.push({ ic: "grid", label: "R\u00e9cap", fn: function () { openCoach(); } }); }
-    var sz = mob ? 30 : 26;
+    if (coach) { tiles.push(nat("🔍", "Audit", "Audit")); tiles.push({ emoji: "🗂️", label: "Récap", fn: function () { openCoach(); } }); }
     tiles.forEach(function (t) {
       var b = document.createElement("button"); b.className = "exh-tile";
       b.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:" + (mob ? 10 : 8) + "px;background:linear-gradient(160deg," + C.card + "," + C.surf + ");border:1px solid rgba(201,168,76,.28);border-radius:20px;padding:" + (mob ? 18 : 16) + "px 8px;cursor:pointer;color:" + C.text + ";font-family:inherit;box-shadow:0 2px 8px rgba(0,0,0,.32), inset 0 1px 0 rgba(255,255,255,.05)";
       var plate = document.createElement("div");
-      plate.style.cssText = "width:" + (mob ? 52 : 46) + "px;height:" + (mob ? 52 : 46) + "px;border-radius:15px;display:flex;align-items:center;justify-content:center;background:linear-gradient(140deg,rgba(201,168,76,.16),rgba(224,133,46,.10));border:1px solid rgba(201,168,76,.30);box-shadow:inset 0 1px 0 rgba(255,255,255,.07)";
-      plate.innerHTML = '<svg viewBox="0 0 24 24" width="' + sz + '" height="' + sz + '" fill="none" stroke="' + C.gold + '" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + (ICONS[t.ic] || "") + '</svg>';
+      plate.style.cssText = "width:" + (mob ? 52 : 46) + "px;height:" + (mob ? 52 : 46) + "px;border-radius:15px;display:flex;align-items:center;justify-content:center;background:linear-gradient(140deg,rgba(245,240,232,.10),rgba(201,168,76,.16));border:1px solid rgba(201,168,76,.32);box-shadow:inset 0 1px 0 rgba(255,255,255,.07)";
+      var em = document.createElement("div"); em.textContent = t.emoji; em.style.cssText = "font-size:" + (mob ? 31 : 28) + "px;line-height:1;filter:saturate(1.45) brightness(1.1) contrast(1.05) drop-shadow(0 1px 2px rgba(0,0,0,.4))";
+      plate.appendChild(em);
       var lb = document.createElement("div"); lb.textContent = t.label; lb.style.cssText = "font-size:" + (mob ? 12 : 11) + "px;font-weight:700;text-align:center;color:" + C.text + ";letter-spacing:.01em";
       b.appendChild(plate); b.appendChild(lb); b.onclick = t.fn;
       grid.appendChild(b);
@@ -1218,7 +1200,7 @@ react-dom/cjs/react-dom-client.production.js:
     box.appendChild(grid);
     var ver = document.createElement("div");
     ver.style.cssText = "text-align:center;font-size:11px;color:" + C.dim + ";margin-top:16px;opacity:.8";
-    ver.textContent = "Ex Home · interface v19 (29-06)";
+    ver.textContent = "Ex Home · interface v21 (29-06)";
     box.appendChild(ver);
   }
 })();
