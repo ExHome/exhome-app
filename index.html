@@ -577,7 +577,7 @@ react-dom/cjs/react-dom-client.production.js:
   function renderDetail(id, target) {
     if (!id) { target.innerHTML = ""; return; }
     target.innerHTML = '<div style="color:' + C.dim + ';padding:10px 0">Chargement…</div>';
-    Promise.all([loadTargets(id), cloudGet(id + "-ergohist"), cloudGet(id + "-ergolive"), cloudGet(id + "-taskcount"), loadScans(id)]).then(function (res) {
+    Promise.all([loadTargets(id), cloudGet(id + "-ergohist"), cloudGet(id + "-ergolive"), cloudGet(id + "-taskcount"), loadAllMeasures(id)]).then(function (res) {
       var tg = res[0] || { ram: 0, basale: 0 }, hist = res[1] || {}, live = res[2] || {}, tc = res[3] || {}, measures = res[4] || [];
       var setBox = '<div style="background:' + C.card + ';border:1px solid ' + C.gold + '55;border-radius:12px;padding:12px;margin-bottom:12px"><div style="font-size:12px;font-weight:800;color:' + C.gold + ';margin-bottom:10px">⚙️ Valeurs fixées par le coach</div><div style="display:flex;gap:10px;margin-bottom:10px"><div style="flex:1"><label style="font-size:10px;color:' + C.dim + ';display:block;margin-bottom:4px">Objectif ramassages / jour</label><input id="exh-ram" type="number" inputmode="numeric" value="' + (tg.ram || "") + '" placeholder="ex : 25" style="width:100%;box-sizing:border-box;padding:9px 10px;border-radius:8px;border:1px solid ' + C.border + ';background:' + C.surf + ';color:' + C.text + ';font:inherit"></div><div style="flex:1"><label style="font-size:10px;color:' + C.dim + ';display:block;margin-bottom:4px">Basale (kcal / jour)</label><input id="exh-bas" type="number" inputmode="numeric" value="' + (tg.basale || "") + '" placeholder="ex : 1650" style="width:100%;box-sizing:border-box;padding:9px 10px;border-radius:8px;border:1px solid ' + C.border + ';background:' + C.surf + ';color:' + C.text + ';font:inherit"></div></div><button id="exh-save" style="width:100%;padding:10px;border:none;border-radius:9px;background:' + C.gold + ';color:' + C.bg + ';font-weight:800;cursor:pointer">Enregistrer</button><div id="exh-saved" style="font-size:11px;color:' + C.ok + ';text-align:center;margin-top:6px;height:14px"></div></div>';
       var ergo = Object.assign({}, hist.ergo || {}), chrono = Object.assign({}, hist.chrono || {}); var lv = live.ergoLive, cv = live.chronoLive;
@@ -625,7 +625,7 @@ react-dom/cjs/react-dom-client.production.js:
     var box = overlay(); header(box, "✦ Mon tableau de bord");
     var c = findClient(id) || {}, prenom = (c.nom || "").split(" ")[0] || "";
     var body = document.createElement("div"); body.innerHTML = '<div style="color:' + C.dim + '">Chargement…</div>'; box.appendChild(body);
-    Promise.all([loadTargets(id), loadScans(id), loadEffort(id)]).then(function (res) {
+    Promise.all([loadTargets(id), loadAllMeasures(id), loadEffort(id)]).then(function (res) {
       var tg = res[0] || { ram: 0, basale: 0 }, measures = res[1] || [], effortDays = res[2] || {};
       var jours = ((c.joursReussis) || []).length, bt = belt(jours), ram = todayRam(id);
       var week = ergoSeries(id, 7), month = ergoSeries(id, 30), mv = month.map(function (x) { return x.value; }), monthTot = mv.reduce(function (a, b) { return a + b; }, 0);
@@ -939,7 +939,7 @@ react-dom/cjs/react-dom-client.production.js:
   function openMeasures(id, back) {
     var box = overlay(); header(box, "📊 Mesures & évolution", back); var __nm = (findClient(id) || {}).nom; if (__nm) { var __s = document.createElement("div"); __s.style.cssText = "font-size:12px;color:" + C.gold + ";font-weight:700;margin:-4px 0 12px"; __s.textContent = "Cliente : " + __nm; box.appendChild(__s); }
     var body = document.createElement("div"); body.innerHTML = '<div style="color:' + C.dim + '">Chargement…</div>'; box.appendChild(body);
-    loadScans(id).then(function (measures) {
+    loadAllMeasures(id).then(function (measures) {
       body.innerHTML = "";
       if (!measures || !measures.length) { body.innerHTML = '<div style="font-size:13px;color:' + C.dim + '">Aucune mesure pour le moment. Scanne une mesure pour démarrer le suivi.</div>'; return; }
       var present = SCAN_FIELDS.filter(function (f) { return measures.some(function (m) { return m[f.k] != null; }); });
@@ -967,6 +967,24 @@ react-dom/cjs/react-dom-client.production.js:
         body.appendChild(d);
       });
     }).catch(function () { body.innerHTML = '<div style="color:#E07060">Erreur de chargement.</div>'; });
+  }
+  /* ===================== Fusion mesures natives (Santé) + scans (lecture seule) v12 ===================== */
+  var NATIVE_MAP = { poids: "poids", masseGrasse: "graisse", masseMusc: "muscle", eauCorp: "eau", basale: "metabolisme", imc: "imc", masseOsseuse: "osseuse", tourTaille: "tourTaille", tourHanches: "tourHanches", fcRepos: "fcRepos", pas: "pas", sommeil: "sommeil", calories: "calories", viscerale: "viscerale", sousCutanee: "sousCutanee", proteines: "proteines", muscleSquel: "muscleSquel", masseMaigre: "maigre", ageMeta: "age" };
+  function nativeMeasures(id) {
+    var c = findClient(id) || {}; var arr = (c.sante && c.sante.mesures) || [];
+    if (!Array.isArray(arr)) return [];
+    return arr.map(function (m) {
+      var o = { date: m.date || today(), ts: m.ts || (m.date ? new Date(m.date).getTime() : Date.now()), source: m.source || "santé" };
+      Object.keys(NATIVE_MAP).forEach(function (nk) { if (m[nk] != null && m[nk] !== "") { var v = parseFloat(m[nk]); if (!isNaN(v)) o[NATIVE_MAP[nk]] = v; } });
+      return o;
+    });
+  }
+  function loadAllMeasures(id) {
+    return loadScans(id).then(function (scans) {
+      var all = (scans || []).concat(nativeMeasures(id));
+      all.sort(function (a, b) { return (a.date || "").localeCompare(b.date || "") || ((a.ts || 0) - (b.ts || 0)); });
+      return all;
+    }).catch(function () { return nativeMeasures(id); });
   }
 })();
 </script>
