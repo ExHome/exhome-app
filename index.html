@@ -611,8 +611,8 @@ react-dom/cjs/react-dom-client.production.js:
     if (!s) { if (btn) btn.remove(); return; }
     initRealtime();
     if (!btn) { btn = document.createElement("button"); btn.id = "exh-btn"; btn.style.cssText = btnStyle(); document.body.appendChild(btn); }
-    if (s.role === "coach") { btn.textContent = "⊞ Accueil"; btn.onclick = openLauncher; coachRecapNotif(); }
-    else if (s.role === "client" && s.clientId) { btn.textContent = "⊞ Accueil"; btn.onclick = openLauncher; maybeAutoOpenDash(); }
+    if (s.role === "coach") { btn.textContent = "⊞ Accueil"; btn.onclick = openLauncher; coachRecapNotif(); maybeAutoOpenLauncher(); }
+    else if (s.role === "client" && s.clientId) { btn.textContent = "⊞ Accueil"; btn.onclick = openLauncher; maybeAutoOpenLauncher(); }
     else { btn.remove(); }
   }
   window.addEventListener("load", function () { setTimeout(refreshButton, 1500); });
@@ -774,6 +774,13 @@ react-dom/cjs/react-dom-client.production.js:
     var flag = "exhome_dash_auto_" + s.clientId;
     try { if (sessionStorage.getItem(flag)) return; sessionStorage.setItem(flag, "1"); } catch (e) {}
     openClientDash(s.clientId);
+  }
+  function maybeAutoOpenLauncher() {
+    var s = session(); if (!s || !(s.role === "coach" || (s.role === "client" && s.clientId))) return;
+    if (document.getElementById("exh-ov")) return;
+    var flag = "exhome_acc_seen_" + (s.role === "client" ? s.clientId : "coach");
+    try { if (sessionStorage.getItem(flag)) return; sessionStorage.setItem(flag, "1"); } catch (e) {}
+    setTimeout(function () { if (!document.getElementById("exh-ov")) openLauncher(); }, 900);
   }
   /* ===================== Ressenti d'effort (RPE) v9 ===================== */
   var EFFORT = [
@@ -1056,6 +1063,36 @@ react-dom/cjs/react-dom-client.production.js:
     t.style.cssText = "position:fixed;left:50%;bottom:78px;transform:translateX(-50%);z-index:99999;max-width:88%;text-align:center;background:" + C.card + ";color:" + C.text + ";border:1px solid " + C.gold + "66;border-radius:10px;padding:10px 14px;font:600 13px system-ui,-apple-system,sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.5)";
     document.body.appendChild(t); setTimeout(function () { t.remove(); }, 2400);
   }
+  function openGuide() {
+    var s = session(); var coach = s && s.role === "coach";
+    var box = overlay(); header(box, "❓ Où trouver quoi ?");
+    var intro = document.createElement("div"); intro.style.cssText = "font-size:12.5px;color:" + C.dim + ";margin:-6px 0 14px;line-height:1.5";
+    intro.textContent = "Une info = un seul bon endroit. Voici le repère pour t'y retrouver sans te poser de question.";
+    box.appendChild(intro);
+    var rows = [
+      ["🏠", "Tout commence à l'Accueil", "Le bouton ⊞ Accueil ouvre cette grille : ton point de départ unique."],
+      ["📊", "Vue d'ensemble & progression", "Tableau de bord : ta ceinture, ta semaine, tes courbes en un coup d'œil."],
+      ["📋", "Tes exercices du jour", "Programme : la liste des gestes à faire."],
+      ["🏠", "Compter pendant la séance", "Compteur ergo : squats, ramassages, chrono du moment."],
+      ["📈", "Tes mesures & leur évolution", "Mesures : l'endroit UNIQUE pour saisir et suivre poids, masse grasse, etc. (Santé et Audit en affichent aussi, mais centralise tout dans Mesures.)"],
+      ["📷", "Lire ta balance d'un coup", "Scan balance : photographie l'écran, les chiffres arrivent dans Mesures."],
+      ["🍽️", "Ce que tu manges au quotidien", "Nutrition (repas) : ton journal alimentaire du jour."],
+      ["📝", "Le questionnaire de départ", "Bilan nutritionnel : à remplir une fois, pour cerner tes habitudes. (À ne pas confondre avec le journal des repas.)"],
+      ["🎯", "Tes objectifs", "Objectifs : ce que tu vises."],
+      ["💧", "Ton hydratation", "Hydratation : ton suivi d'eau."]
+    ];
+    if (coach) rows.push(["🗂️", "Suivi de toutes tes clientes", "Récap : la synthèse côté coach."]);
+    rows.forEach(function (r) {
+      var card = document.createElement("div");
+      card.style.cssText = "display:flex;gap:11px;align-items:flex-start;background:" + C.surf + ";border:1px solid " + C.border + ";border-radius:12px;padding:11px 13px;margin-bottom:9px";
+      var em = document.createElement("div"); em.textContent = r[0]; em.style.cssText = "font-size:20px;line-height:1.2;flex-shrink:0";
+      var txt = document.createElement("div");
+      var t1 = document.createElement("div"); t1.textContent = r[1]; t1.style.cssText = "font-weight:700;font-size:13.5px;color:" + C.text + ";margin-bottom:2px";
+      var t2 = document.createElement("div"); t2.textContent = r[2]; t2.style.cssText = "font-size:12px;color:" + C.dim + ";line-height:1.45";
+      txt.appendChild(t1); txt.appendChild(t2); card.appendChild(em); card.appendChild(txt);
+      box.appendChild(card);
+    });
+  }
   function openLauncher() {
     var s = session(); if (!s) return;
     var coach = s.role === "coach";
@@ -1069,18 +1106,19 @@ react-dom/cjs/react-dom-client.production.js:
     function nat(emoji, label, word) { return { emoji: emoji, label: label, fn: function () { var o = document.getElementById("exh-ov"); if (o) o.remove(); if (!clickNativeTab(word)) exhToast("Ouvre d'abord une cliente pour « " + label + " »."); } }; }
     function needId(opener) { return function () { var id = targetClientId(); if (id) opener(id); else if (coach) openCoach(); else exhToast("Section indisponible ici."); }; }
     var tiles = [
+      { emoji: "❓", label: "Repères", fn: function () { openGuide(); } },
       { emoji: "📊", label: "Tableau de bord", fn: function () { openDashboard(); } },
       nat("📋", "Programme", "Programme"),
-      nat("❤️", "Santé", "Santé"),
-      nat("🍽️", "Nutrition", "Nutrition"),
-      { emoji: "📝", label: "Bilan nutri", fn: needId(openNutritionAudit) },
-      { emoji: "📈", label: "Mesures", fn: needId(openMeasures) },
+      nat("🏠", "Compteur ergo", "Compteur"),
       nat("🎯", "Objectifs", "Objectifs"),
+      { emoji: "📈", label: "Mesures", fn: needId(openMeasures) },
+      { emoji: "📷", label: "Scan balance", fn: needId(openScan) },
+      nat("❤️", "Santé", "Santé"),
+      nat("🍽️", "Nutrition (repas)", "Nutrition"),
+      { emoji: "📝", label: "Bilan nutritionnel", fn: needId(openNutritionAudit) },
       nat("💧", "Hydratation", "Hydratation"),
-      nat("🏠", "Compteur", "Compteur"),
       nat("📅", "Séances", "Séances"),
-      nat("💬", "Messages", "Messages"),
-      { emoji: "📷", label: "Scan balance", fn: needId(openScan) }
+      nat("💬", "Messages", "Messages")
     ];
     if (coach) { tiles.push(nat("🔍", "Audit", "Audit")); tiles.push({ emoji: "🗂️", label: "Récap", fn: function () { openCoach(); } }); }
     tiles.forEach(function (t) {
