@@ -293,4 +293,272 @@ react-dom/cjs/react-dom-client.production.js:
    *)
 */
 </script>
+<script>
+/* =====================================================================
+   EX HOME — Couche "Historique & Anti-recul"  (v1)
+   ---------------------------------------------------------------------
+   Module AUTONOME ajouté APRÈS l'app. Il ne modifie aucune ligne du
+   React compilé : il lit/écrit uniquement les mêmes clés que l'app
+   utilise déjà, et une clé cloud DÉDIÉE "<id>-ergohist" qui n'entre
+   en collision avec rien.
+
+   Ce qu'il garantit :
+   1) ARCHIVAGE  : chaque journée passée est figée et conservée.
+   2) ANTI-RECUL : fusion convergente (on garde toujours la valeur la
+                   plus haute) — un 41 ne peut JAMAIS être écrasé par un 5,
+                   ni localement, ni au cloud. Les journées perdues du
+                   localStorage sont restaurées depuis le cloud.
+   3) HISTORIQUE COACH : bouton flottant (visible côté coach uniquement)
+                   ouvrant l'historique jour par jour de chaque cliente.
+   4) HISTORIQUE CLIENTE : la cliente conserve ses jours passés (durables),
+                   l'app continue de les afficher dans "Ma progression".
+   ===================================================================== */
+(function () {
+  "use strict";
+
+  var SB_URL = "https://tsvsoormwryatcouztrb.supabase.co";
+  var SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRzdnNvb3Jtd3J5YXRjb3V6dHJiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI0NzEwMzMsImV4cCI6MjA5ODA0NzAzM30.IoquMyBUZE6QrEQdIJGgHF80QukJdG_Rqucfkvm0iy4";
+  var REST = SB_URL + "/rest/v1/exhome_client_data";
+  var H = { apikey: SB_KEY, Authorization: "Bearer " + SB_KEY, "Content-Type": "application/json" };
+
+  function today() { return new Date().toISOString().split("T")[0]; }
+  function isDate(d) { return /^\d{4}-\d{2}-\d{2}$/.test(d); }
+  function rLS(k) { try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
+  function wLS(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+
+  /* ---------- Cloud (mêmes endpoint/clé/format que l'app) ---------- */
+  function cloudGet(cid) {
+    return fetch(REST + "?client_id=eq." + encodeURIComponent(cid) + "&select=payload,updated_at", { headers: H })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (rows) {
+        if (rows && rows[0]) { try { return JSON.parse(rows[0].payload); } catch (e) { return null; } }
+        return null;
+      })
+      .catch(function () { return null; });
+  }
+  function cloudPut(cid, payload) {
+    return fetch(REST, {
+      method: "POST",
+      headers: { apikey: SB_KEY, Authorization: "Bearer " + SB_KEY, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" },
+      body: JSON.stringify({ client_id: cid, payload: JSON.stringify(payload), updated_at: new Date().toISOString() })
+    }).catch(function () {});
+  }
+
+  /* ---------- Lecture des données locales de l'app ---------- */
+  function localErgo(id) {
+    var raw = rLS("exhome_ergo_" + id) || {}, out = {};
+    Object.keys(raw).forEach(function (d) {
+      if (!isDate(d)) return;
+      var e = raw[d] || {};
+      out[d] = { squat: e.squat || 0, hinge: e.hinge || 0, fente: e.fente || 0, etages: e.etages || 0 };
+    });
+    return out;
+  }
+  function localChrono(id) {
+    var raw = rLS("exhome_chrono_" + id) || {}, out = {};
+    (raw.sessions || []).forEach(function (s) {
+      if (s && s.date) out[s.date] = (out[s.date] || 0) + (s.dur || 0);
+    });
+    return out;
+  }
+
+  /* ---------- Fusion convergente : on ne descend JAMAIS (anti-recul) ---------- */
+  function mergeErgo(a, b) {
+    var out = {}, dates = {};
+    [a, b].forEach(function (o) { if (o) Object.keys(o).forEach(function (d) { dates[d] = 1; }); });
+    Object.keys(dates).forEach(function (d) {
+      var x = (a && a[d]) || {}, y = (b && b[d]) || {};
+      out[d] = {
+        squat: Math.max(x.squat || 0, y.squat || 0),
+        hinge: Math.max(x.hinge || 0, y.hinge || 0),
+        fente: Math.max(x.fente || 0, y.fente || 0),
+        etages: Math.max(x.etages || 0, y.etages || 0)
+      };
+    });
+    return out;
+  }
+  function mergeChrono(a, b) {
+    var out = {}, dates = {};
+    [a, b].forEach(function (o) { if (o) Object.keys(o).forEach(function (d) { dates[d] = 1; }); });
+    Object.keys(dates).forEach(function (d) { out[d] = Math.max((a && a[d]) || 0, (b && b[d]) || 0); });
+    return out;
+  }
+
+  /* ---------- Restauration des jours PASSÉS dans le localStorage ----------
+     (on ne touche JAMAIS au jour courant pour ne pas gêner les compteurs
+      actifs gérés par l'app ; le jour courant guérit au prochain chargement) */
+  function restorePast(id, archErgo) {
+    var raw = rLS("exhome_ergo_" + id) || {}, t = today(), changed = false;
+    Object.keys(archErgo).forEach(function (d) {
+      if (d === t) return;
+      var a = archErgo[d], cur = raw[d];
+      if (!cur) { raw[d] = { squat: a.squat, hinge: a.hinge, fente: a.fente, etages: a.etages, log: [] }; changed = true; return; }
+      ["squat", "hinge", "fente", "etages"].forEach(function (m) {
+        if ((cur[m] || 0) < (a[m] || 0)) { cur[m] = a[m]; changed = true; }
+      });
+    });
+    if (changed) wLS("exhome_ergo_" + id, raw);
+  }
+
+  /* ---------- Synchronisation d'une cliente (appelée côté cliente) ---------- */
+  function syncClient(id) {
+    if (!id) return Promise.resolve();
+    var lE = localErgo(id), lC = localChrono(id);
+    return cloudGet(id + "-ergohist").then(function (remote) {
+      remote = remote || {};
+      var mE = mergeErgo(remote.ergo, lE);
+      var mC = mergeChrono(remote.chrono, lC);
+      restorePast(id, mE);
+      var payload = { ergo: mE, chrono: mC, updatedAt: new Date().toISOString() };
+      wLS("exhome_ergohist_" + id, payload);
+      return cloudPut(id + "-ergohist", payload);
+    }).catch(function () {});
+  }
+
+  function session() { try { return JSON.parse(sessionStorage.getItem("exhome_session")) || null; } catch (e) { return null; } }
+
+  /* ---------- Boucle : au chargement, périodique, + bascule de minuit ---------- */
+  function tick() {
+    var s = session();
+    if (s && s.role === "client" && s.clientId) syncClient(s.clientId);
+  }
+  var lastDay = today();
+  function midnightWatch() {
+    var t = today();
+    if (t !== lastDay) { lastDay = t; tick(); }   // journée figée à la bascule de date
+  }
+  window.addEventListener("load", function () { setTimeout(tick, 4000); });
+  setInterval(tick, 60000);          // re-sync toutes les minutes
+  setInterval(midnightWatch, 30000); // détecte le passage à un nouveau jour
+
+  /* =====================================================================
+     HISTORIQUE CÔTÉ COACH — bouton flottant + panneau (coach uniquement)
+     ===================================================================== */
+  var C = { bg: "#0F2820", surf: "#163428", card: "#1B4D3E", gold: "#C9A84C", text: "#F5F0E8", dim: "#5A8A68", border: "#1E4A38" };
+
+  function fmtTime(sec) {
+    var h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+    return h > 0 ? (h + "h" + String(m).padStart(2, "0")) : (String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0"));
+  }
+  function fmtDate(d) { var p = d.split("-"); return p[2] + "/" + p[1] + "/" + p[0]; }
+
+  function coachClients() {
+    var st = rLS("exhome_v5"); var arr = (st && st.clients) || [];
+    return Array.isArray(arr) ? arr.map(function (c) { return { id: c.id, nom: c.nom }; }).filter(function (c) { return c.id; }) : [];
+  }
+
+  function buildButton() {
+    if (document.getElementById("exh-hist-btn")) return;
+    var b = document.createElement("button");
+    b.id = "exh-hist-btn";
+    b.textContent = "📊 Historique ergo";
+    b.style.cssText = "position:fixed;left:14px;bottom:14px;z-index:9000;background:" + C.card +
+      ";color:" + C.gold + ";border:1.5px solid " + C.gold + "66;border-radius:24px;padding:10px 16px;" +
+      "font:600 13px system-ui,-apple-system,sans-serif;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.45)";
+    b.onclick = openPanel;
+    document.body.appendChild(b);
+  }
+
+  function openPanel() {
+    var old = document.getElementById("exh-hist-ov"); if (old) old.remove();
+    var ov = document.createElement("div");
+    ov.id = "exh-hist-ov";
+    ov.style.cssText = "position:fixed;inset:0;z-index:99990;background:rgba(8,20,15,.86);display:flex;" +
+      "align-items:center;justify-content:center;padding:16px;font:14px system-ui,-apple-system,sans-serif";
+    var box = document.createElement("div");
+    box.style.cssText = "background:" + C.bg + ";border:1.5px solid " + C.gold + "55;border-radius:16px;" +
+      "width:100%;max-width:680px;max-height:88vh;overflow:auto;padding:18px;color:" + C.text;
+    ov.appendChild(box);
+    ov.addEventListener("click", function (e) { if (e.target === ov) ov.remove(); });
+
+    var clients = coachClients();
+    var head = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">' +
+      '<div style="font-weight:800;color:' + C.gold + ';font-size:16px">📊 Historique ergo — jour par jour</div>' +
+      '<button id="exh-x" style="background:none;border:none;color:' + C.dim + ';font-size:22px;cursor:pointer">×</button></div>';
+    var picker = '<label style="font-size:11px;color:' + C.dim + ';text-transform:uppercase;letter-spacing:.06em">Cliente</label>' +
+      '<select id="exh-sel" style="width:100%;margin:6px 0 14px;padding:10px 12px;border-radius:10px;background:' + C.surf +
+      ';color:' + C.text + ';border:1px solid ' + C.border + ';font:inherit">' +
+      '<option value="">— Choisir une cliente —</option>' +
+      clients.map(function (c) { return '<option value="' + c.id + '">' + (c.nom || c.id) + '</option>'; }).join("") +
+      '</select>';
+    box.innerHTML = head + picker + '<div id="exh-body" style="color:' + C.dim + ';font-size:13px">Sélectionnez une cliente pour afficher son historique.</div>';
+    box.querySelector("#exh-x").onclick = function () { ov.remove(); };
+    box.querySelector("#exh-sel").onchange = function () { renderHistory(this.value, box.querySelector("#exh-body")); };
+    document.body.appendChild(ov);
+  }
+
+  function renderHistory(id, target) {
+    if (!id) { target.innerHTML = "Sélectionnez une cliente."; return; }
+    target.innerHTML = '<div style="padding:18px 0;color:' + C.dim + '">Chargement…</div>';
+    Promise.all([cloudGet(id + "-ergohist"), cloudGet(id + "-ergolive")]).then(function (res) {
+      var hist = res[0] || {}, live = res[1] || {};
+      var ergo = Object.assign({}, hist.ergo || {});
+      var chrono = Object.assign({}, hist.chrono || {});
+      // Intègre le jour courant depuis le snapshot live (s'il existe)
+      var lv = live.ergoLive, cv = live.chronoLive;
+      if (lv && lv.date) {
+        var prev = ergo[lv.date] || {};
+        ergo[lv.date] = {
+          squat: Math.max(prev.squat || 0, lv.squat || 0),
+          hinge: Math.max(prev.hinge || 0, lv.hinge || 0),
+          fente: Math.max(prev.fente || 0, lv.fente || 0),
+          etages: Math.max(prev.etages || 0, lv.etages || 0)
+        };
+      }
+      if (cv && cv.date) chrono[cv.date] = Math.max(chrono[cv.date] || 0, cv.base || 0);
+
+      var dates = Object.keys(ergo).filter(isDate).sort().reverse();
+      if (!dates.length) { target.innerHTML = '<div style="padding:20px;text-align:center;color:' + C.dim + '">Aucune donnée ergo enregistrée pour cette cliente.</div>'; return; }
+
+      var t = today();
+      var rows = dates.map(function (d) {
+        var e = ergo[d], ram = (e.squat || 0) + (e.hinge || 0) + (e.fente || 0);
+        var ch = chrono[d] ? fmtTime(chrono[d]) : "—";
+        var hl = d === t;
+        return '<tr style="' + (hl ? "background:" + C.gold + "14;" : "") + 'border-bottom:1px solid ' + C.border + '">' +
+          '<td style="padding:7px 8px;font-weight:' + (hl ? 700 : 400) + ';color:' + (hl ? C.gold : C.text) + '">' + fmtDate(d) + (hl ? " • auj." : "") + '</td>' +
+          '<td style="padding:7px 8px;text-align:center;font-weight:700;color:' + C.gold + '">' + ram + '</td>' +
+          '<td style="padding:7px 8px;text-align:center">' + (e.squat || 0) + '</td>' +
+          '<td style="padding:7px 8px;text-align:center">' + (e.hinge || 0) + '</td>' +
+          '<td style="padding:7px 8px;text-align:center">' + (e.fente || 0) + '</td>' +
+          '<td style="padding:7px 8px;text-align:center">' + (e.etages || 0) + '</td>' +
+          '<td style="padding:7px 8px;text-align:center;color:' + C.dim + '">' + ch + '</td></tr>';
+      }).join("");
+
+      var totRam = dates.reduce(function (s, d) { var e = ergo[d]; return s + (e.squat || 0) + (e.hinge || 0) + (e.fente || 0); }, 0);
+      var totEt = dates.reduce(function (s, d) { return s + (ergo[d].etages || 0); }, 0);
+      var jActifs = dates.filter(function (d) { var e = ergo[d]; return (e.squat || 0) + (e.hinge || 0) + (e.fente || 0) + (e.etages || 0) > 0; }).length;
+
+      target.innerHTML =
+        '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">' +
+          stat(jActifs, "jours actifs") + stat(totRam, "ramassages") + stat(totEt, "étages") +
+        '</div>' +
+        '<div style="overflow:auto;border:1px solid ' + C.border + ';border-radius:10px">' +
+        '<table style="width:100%;border-collapse:collapse;font-size:12px">' +
+        '<thead><tr style="background:' + C.surf + ';color:' + C.dim + '">' +
+        ['Date', 'Ramass.', '🧍 Squat', '🔄 Hinge', '🏃 Fente', '🪜 Étages', '⏱ Chrono']
+          .map(function (h) { return '<th style="padding:8px;text-align:' + (h === 'Date' ? 'left' : 'center') + ';font-weight:700;white-space:nowrap">' + h + '</th>'; }).join("") +
+        '</tr></thead><tbody>' + rows + '</tbody></table></div>' +
+        '<div style="font-size:10px;color:' + C.dim + ';margin-top:8px">Données figées et fusionnées en valeur maximale (anti-recul). 1 ramassage ≈ 8 s de mouvement actif.</div>';
+    }).catch(function () {
+      target.innerHTML = '<div style="padding:20px;text-align:center;color:#E07060">Impossible de charger l\'historique (réseau).</div>';
+    });
+  }
+  function stat(v, l) {
+    return '<div style="background:' + C.card + ';border:1px solid ' + C.border + ';border-radius:10px;padding:10px;text-align:center">' +
+      '<div style="font-size:20px;font-weight:800;color:' + C.gold + '">' + v + '</div>' +
+      '<div style="font-size:9px;color:' + C.dim + ';text-transform:uppercase;letter-spacing:.05em">' + l + '</div></div>';
+  }
+
+  /* Affiche le bouton coach quand une session coach est active (revérifie périodiquement) */
+  function refreshButton() {
+    var s = session();
+    var btn = document.getElementById("exh-hist-btn");
+    if (s && s.role === "coach") { if (!btn) buildButton(); }
+    else if (btn) { btn.remove(); }
+  }
+  window.addEventListener("load", function () { setTimeout(refreshButton, 1500); });
+  setInterval(refreshButton, 4000);
+})();
+</script>
 </body></html>
