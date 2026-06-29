@@ -684,7 +684,7 @@ react-dom/cjs/react-dom-client.production.js:
     st.textContent =
       '#root img[style*="border-radius: 50%"],#root img[style*="border-radius:50%"]' +
       '{object-fit:cover !important;object-position:center !important;}' +
-      '#root div[style*="linear-gradient(180deg"],#root div[style*="rotate(22deg)"],#root div[style*="rotate(-16deg)"]{display:none !important;}';
+      '#root div[style*="rgba(0, 0, 0, 0.35)"],#root div[style*="rgba(0,0,0,0.35)"],#root div[style*="rotate(22deg)"],#root div[style*="rotate(-16deg)"]{display:none !important;}';
     document.head.appendChild(st);
   }
 
@@ -1043,7 +1043,9 @@ react-dom/cjs/react-dom-client.production.js:
       var st = el.style; if (!st) continue;
       var tr = st.transform || "";
       var bg = st.backgroundImage || st.background || "";
-      if (tr.indexOf("rotate(22deg)") > -1 || tr.indexOf("rotate(-16deg)") > -1 || bg.indexOf("linear-gradient(180deg") > -1) {
+      var isKnot = tr.indexOf("rotate(22deg)") > -1 || tr.indexOf("rotate(-16deg)") > -1;
+      var isBand = bg.indexOf("linear-gradient") > -1 && (st.borderTopColor === "rgba(255, 255, 255, 0.5)" || st.borderBottomColor === "rgba(0, 0, 0, 0.35)");
+      if (isKnot || isBand) {
         el.style.display = "none"; el.setAttribute("data-exh-belt", "1");
       }
     }
@@ -1147,7 +1149,7 @@ react-dom/cjs/react-dom-client.production.js:
     box.appendChild(grid);
     var ver = document.createElement("div");
     ver.style.cssText = "text-align:center;font-size:11px;color:" + C.dim + ";margin-top:16px;opacity:.8";
-    ver.textContent = "Ex Home · interface v15 (29-06)";
+    ver.textContent = "Ex Home · interface v16 (29-06)";
     box.appendChild(ver);
   }
 })();
