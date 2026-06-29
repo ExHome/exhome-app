@@ -373,14 +373,36 @@ react-dom/cjs/react-dom-client.production.js:
       document.head.appendChild(s);
     });
   }
+  var SCAN_FIELDS = [
+    { k: "poids", label: "Poids", unit: "kg", emoji: "\u2696\ufe0f", dec: true },
+    { k: "graisse", label: "Masse grasse", unit: "%", emoji: "\U0001FAC0", dec: true },
+    { k: "muscle", label: "Masse musculaire", unit: "kg", emoji: "\U0001F4AA", dec: true },
+    { k: "eau", label: "Eau", unit: "%", emoji: "\U0001F4A7", dec: true },
+    { k: "osseuse", label: "Masse osseuse", unit: "kg", emoji: "\U0001F9B4", dec: true },
+    { k: "imc", label: "IMC", unit: "", emoji: "\U0001F4CA", dec: true },
+    { k: "viscerale", label: "Graisse visc\u00e9rale", unit: "", emoji: "\U0001F536", dec: false },
+    { k: "metabolisme", label: "M\u00e9tabolisme de base", unit: "kcal", emoji: "\U0001F525", dec: false },
+    { k: "age", label: "\u00c2ge m\u00e9tabolique", unit: "ans", emoji: "\u23F3", dec: false },
+    { k: "maigre", label: "Masse maigre", unit: "kg", emoji: "\U0001F33F", dec: true },
+    { k: "calories", label: "Calories", unit: "kcal", emoji: "\U0001F37D\ufe0f", dec: false },
+    { k: "pas", label: "Pas", unit: "", emoji: "\U0001F463", dec: false }
+  ];
   function parseMeasures(text) {
-    var t = (text || "").replace(/,/g, ".");
+    var t = (text || "").replace(/,/g, ".").toLowerCase();
     function g(re) { var x = t.match(re); return x ? x[1] : ""; }
     return {
-      poids: g(/(\d{2,3}(?:\.\d)?)\s*kg/i),
-      graisse: g(/(\d{1,2}(?:\.\d)?)\s*%/),
-      calories: g(/(\d{3,4})\s*k?cal/i),
-      pas: g(/(\d{3,6})\s*(?:pas|steps?|step)/i)
+      viscerale: g(/visc[e\u00e9]rale?\D{0,12}(\d{1,2})/),
+      graisse: g(/(?:masse\s*grasse|graisse\s*corp)\D{0,12}(\d{1,2}(?:\.\d)?)/) || g(/(\d{1,2}(?:\.\d)?)\s*%/),
+      muscle: g(/(?:masse\s*musculaire|muscle)\D{0,12}(\d{2,3}(?:\.\d)?)/),
+      eau: g(/(?:eau|hydrique|hydratation)\D{0,12}(\d{1,2}(?:\.\d)?)/),
+      osseuse: g(/masse\s*osseuse\D{0,12}(\d(?:\.\d)?)/),
+      imc: g(/(?:imc|bmi)\D{0,8}(\d{1,2}(?:\.\d)?)/),
+      metabolisme: g(/(?:m[e\u00e9]tabolisme|basal|bmr)\D{0,14}(\d{3,4})/),
+      age: g(/[a\u00e2]ge\s*m[e\u00e9]tabolique\D{0,8}(\d{1,2})/),
+      maigre: g(/(?:masse\s*maigre|sans\s*graisse)\D{0,14}(\d{2,3}(?:\.\d)?)/),
+      poids: g(/poids\D{0,10}(\d{2,3}(?:\.\d)?)/) || g(/(\d{2,3}(?:\.\d)?)\s*kg/),
+      calories: g(/(\d{3,4})\s*k?cal/),
+      pas: g(/(\d{3,6})\s*(?:pas|steps?|step)/)
     };
   }
 
@@ -440,27 +462,25 @@ react-dom/cjs/react-dom-client.production.js:
     fileGal.onchange = function () { handle(this.files[0]); };
     fileCam.onchange = function () { handle(this.files[0]); };
 
-    function field(label, id, val, unit) {
-      return '<div style="flex:1;min-width:120px"><label style="font-size:10px;color:' + C.dim + ';display:block;margin-bottom:4px">' + label + (unit ? (" (" + unit + ")") : "") + '</label>' +
-        '<input id="' + id + '" inputmode="decimal" value="' + (val || "") + '" style="width:100%;box-sizing:border-box;padding:9px 10px;border-radius:8px;border:1px solid ' + C.border + ';background:' + C.surf + ';color:' + C.text + ';font:inherit"></div>';
-    }
     function showForm(g, raw) {
       form.style.display = "block";
-      form.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px">' +
-        field("Poids", "exh-p", g.poids, "kg") + field("Masse grasse", "exh-g", g.graisse, "%") +
-        field("Calories", "exh-c", g.calories, "kcal") + field("Pas", "exh-pas", g.pas, "") + '</div>' +
+      var fieldsHtml = SCAN_FIELDS.map(function (f) {
+        var v = g && g[f.k] != null ? g[f.k] : "";
+        return '<div style="flex:1 1 calc(50% - 5px);min-width:120px"><label style="font-size:10px;color:' + C.dim + ';display:block;margin-bottom:4px">' + f.label + (f.unit ? (" (" + f.unit + ")") : "") + '</label><input id="exh-f-' + f.k + '" inputmode="decimal" value="' + v + '" style="width:100%;box-sizing:border-box;padding:9px 10px;border-radius:8px;border:1px solid ' + C.border + ';background:' + C.surf + ';color:' + C.text + ';font:inherit"></div>';
+      }).join("");
+      form.innerHTML = '<div style="font-size:11px;color:' + C.dim + ';margin-bottom:8px">V\u00e9rifie et corrige \u2014 laisse vide ce qui n\'appara\u00eet pas sur ta photo.</div><div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px">' + fieldsHtml + '</div>' +
         (raw ? '<details style="margin-bottom:12px"><summary style="font-size:11px;color:' + C.dim + ';cursor:pointer">Voir le texte lu</summary><pre style="white-space:pre-wrap;font-size:10px;color:' + C.dim + ';background:' + C.surf + ';border-radius:8px;padding:8px;max-height:120px;overflow:auto">' + raw.replace(/</g, "&lt;") + '</pre></details>' : '') +
-        '<button id="exh-scan-save" style="width:100%;padding:12px;border:none;border-radius:10px;background:' + C.ok + ';color:#fff;font-weight:800;cursor:pointer">Enregistrer la mesure</button>' +
-        '<div id="exh-scan-ok" style="text-align:center;font-size:12px;color:' + C.ok + ';margin-top:8px;height:16px"></div>';
+        '<button id="exh-scan-save" style="width:100%;padding:12px;border:none;border-radius:10px;background:' + C.ok + ';color:#fff;font-weight:800;cursor:pointer">Enregistrer la mesure</button><div id="exh-scan-ok" style="text-align:center;font-size:12px;color:' + C.ok + ';margin-top:8px;height:16px"></div>';
       form.querySelector("#exh-scan-save").onclick = function () {
         var mes = {};
-        var p = form.querySelector("#exh-p").value, gr = form.querySelector("#exh-g").value, ca = form.querySelector("#exh-c").value, pa = form.querySelector("#exh-pas").value;
-        if (p) mes.poids = parseFloat(p.replace(",", "."));
-        if (gr) mes.graisse = parseFloat(gr.replace(",", "."));
-        if (ca) mes.calories = parseInt(ca, 10);
-        if (pa) mes.pas = parseInt(pa, 10);
+        SCAN_FIELDS.forEach(function (f) {
+          var rawv = (form.querySelector("#exh-f-" + f.k).value || "").replace(",", ".").trim();
+          if (rawv === "") return;
+          var val = f.dec ? parseFloat(rawv) : parseInt(rawv, 10);
+          if (!isNaN(val)) mes[f.k] = val;
+        });
         if (!Object.keys(mes).length) { form.querySelector("#exh-scan-ok").innerHTML = '<span style="color:#E07060">Renseigne au moins une valeur.</span>'; return; }
-        addScan(clientId, mes).then(function () { form.querySelector("#exh-scan-ok").textContent = "✓ Mesure enregistrée et synchronisée"; });
+        addScan(clientId, mes).then(function () { form.querySelector("#exh-scan-ok").textContent = "\u2713 Mesure enregistr\u00e9e et synchronis\u00e9e"; });
       };
     }
   }
@@ -468,14 +488,10 @@ react-dom/cjs/react-dom-client.production.js:
   function measuresCard(measures) {
     if (!measures || !measures.length) return "";
     var last = measures[measures.length - 1];
-    var chips = [];
-    if (last.poids != null) chips.push(chip("⚖️", last.poids, "kg"));
-    if (last.graisse != null) chips.push(chip("🫀", last.graisse, "%"));
-    if (last.calories != null) chips.push(chip("🔥", last.calories, "kcal"));
-    if (last.pas != null) chips.push(chip("👣", last.pas, ""));
+    var chips = SCAN_FIELDS.filter(function (f) { return last[f.k] != null; }).map(function (f) { return chip(f.emoji, last[f.k], f.unit); });
     if (!chips.length) return "";
     return '<div style="background:' + C.card + ';border:1px solid ' + C.border + ';border-radius:12px;padding:12px;margin-bottom:12px">' +
-      '<div style="font-size:11px;color:' + C.dim + ';margin-bottom:8px">Dernière mesure scannée · ' + fmtDate(last.date || today()) + '</div>' +
+      '<div style="font-size:11px;color:' + C.dim + ';margin-bottom:8px">Derni\u00e8re mesure scann\u00e9e \u00b7 ' + fmtDate(last.date || today()) + '</div>' +
       '<div style="display:flex;flex-wrap:wrap;gap:8px">' + chips.join("") + '</div></div>';
   }
 
@@ -577,7 +593,7 @@ react-dom/cjs/react-dom-client.production.js:
     initRealtime();
     if (!btn) { btn = document.createElement("button"); btn.id = "exh-btn"; btn.style.cssText = btnStyle(); document.body.appendChild(btn); }
     if (s.role === "coach") { btn.textContent = "✦ Tableau de bord"; btn.onclick = openDashboard; coachRecapNotif(); }
-    else if (s.role === "client" && s.clientId) { btn.textContent = "✦ Tableau de bord"; btn.onclick = openDashboard; }
+    else if (s.role === "client" && s.clientId) { btn.textContent = "✦ Tableau de bord"; btn.onclick = openDashboard; maybeAutoOpenDash(); }
     else { btn.remove(); }
   }
   window.addEventListener("load", function () { setTimeout(refreshButton, 1500); });
@@ -606,11 +622,11 @@ react-dom/cjs/react-dom-client.production.js:
       if (tg.ram > 0) { var pct = Math.round(ram / tg.ram * 100); html += '<div style="display:flex;align-items:center;gap:14px;background:' + C.card + ';border:1px solid ' + C.border + ';border-radius:14px;padding:14px;margin-bottom:12px">' + svgRing(pct, ram + "/" + tg.ram, "ramassages") + '<div style="flex:1"><div style="font-size:12px;font-weight:700">🎯 Objectif du jour</div><div style="font-size:11px;color:' + C.dim + ';margin-top:3px">' + (ram >= tg.ram ? "Objectif atteint, bravo ! 🎉" : (tg.ram - ram) + " ramassages restants") + '</div>' + (tg.basale > 0 ? '<div style="font-size:11px;color:' + C.dim + ';margin-top:6px">🔥 Basale : <b style="color:' + C.gold + '">' + tg.basale + ' kcal</b></div>' : '') + '</div></div>'; }
       html += '<div style="background:' + C.card + ';border:1px solid ' + C.border + ';border-radius:14px;padding:14px;margin-bottom:12px"><div style="font-size:12px;font-weight:700;margin-bottom:8px">📈 Mes ramassages cette semaine</div>' + svgBars(week.map(function (x) { return { label: x.label, value: x.value, hi: x.today }; })) + '</div>';
       html += '<div style="background:' + C.card + ';border:1px solid ' + C.border + ';border-radius:14px;padding:14px;margin-bottom:12px"><div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-size:12px;font-weight:700">🗓 30 derniers jours</span><span style="font-size:12px;color:' + C.gold + ';font-weight:800">' + monthTot + ' <span style="font-size:10px;color:' + C.dim + '">ramassages</span></span></div>' + svgLine(mv) + '</div>';
-      if (lastM) { var mc = []; if (lastM.poids != null) mc.push(chip("⚖️", lastM.poids, "kg")); if (lastM.graisse != null) mc.push(chip("🫀", lastM.graisse, "%")); if (lastM.calories != null) mc.push(chip("🔥", lastM.calories, "kcal")); html += '<div style="background:' + C.card + ';border:1px solid ' + C.border + ';border-radius:14px;padding:14px;margin-bottom:12px"><div style="font-size:12px;font-weight:700;margin-bottom:8px">⚖️ Mes mesures</div>' + (poidsPts.length > 1 ? svgLine(poidsPts) : '') + '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">' + mc.join("") + '</div></div>'; }
+      if (lastM) { var mc = SCAN_FIELDS.filter(function(f){return lastM[f.k]!=null;}).map(function(f){return chip(f.emoji,lastM[f.k],f.unit);}); html += '<div style="background:' + C.card + ';border:1px solid ' + C.border + ';border-radius:14px;padding:14px;margin-bottom:12px"><div style="font-size:12px;font-weight:700;margin-bottom:8px">⚖️ Mes mesures</div>' + (poidsPts.length > 1 ? svgLine(poidsPts) : '') + '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">' + mc.join("") + '</div></div>'; }
       body.innerHTML = html;
-      var grid = document.createElement("div"); grid.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:2px";
-      addTile(grid, "🧮", "Mes tâches", function () { openTasks(id, function () { openClientDash(id); }); });
-      addTile(grid, "📷", "Scanner une mesure", function () { openScan(id, function () { openClientDash(id); }); });
+      progAccordion(body, id);
+      var grid = document.createElement("div"); grid.style.cssText = "display:grid;grid-template-columns:1fr;gap:10px;margin-top:6px";
+      addTile(grid, "📷", "Scanner une mesure (poids, masse grasse…)", function () { openScan(id, function () { openClientDash(id); }); });
       body.appendChild(grid);
     }).catch(function () { body.innerHTML = '<div style="color:#E07060">Erreur de chargement.</div>'; });
   }
@@ -699,6 +715,43 @@ react-dom/cjs/react-dom-client.production.js:
   }
   injectStyle();
   window.addEventListener("load", function () { injectStyle(); });
+  /* ===================== Accordéon programme + ouverture auto (v8) ===================== */
+  function progAccordion(container, id) {
+    var prog = (findClient(id) || {}).programme || [];
+    var counts = (localTasks(id) || {})[today()] || {};
+    var sec = document.createElement("div"); sec.style.cssText = "margin:8px 0 4px";
+    var ttl = document.createElement("div"); ttl.style.cssText = "font-size:12px;font-weight:700;color:" + C.text + ";margin-bottom:8px"; ttl.textContent = "🗂 Mon programme"; sec.appendChild(ttl);
+    if (!prog.length) { var e = document.createElement("div"); e.style.cssText = "font-size:12px;color:" + C.dim; e.textContent = "Aucun exercice pour le moment."; sec.appendChild(e); container.appendChild(sec); return; }
+    prog.forEach(function (ex) {
+      var n = counts[ex.id] || 0;
+      var d = document.createElement("details"); d.style.cssText = "background:" + C.card + ";border:1px solid " + C.border + ";border-radius:12px;margin-bottom:8px;overflow:hidden";
+      var sum = document.createElement("summary"); sum.style.cssText = "list-style:none;cursor:pointer;padding:12px;display:flex;align-items:center;gap:8px;font-size:13px";
+      sum.innerHTML = '<span style="font-size:16px">' + (CAT[ex.categorie] || "•") + '</span><span style="flex:1;font-weight:600;min-width:0">' + (ex.titre || "Exercice") + '</span><span class="exh-badge" style="font-size:11px;font-weight:700;color:' + (n > 0 ? C.ok : C.dim) + '">' + (n > 0 ? ("✓ " + n + "×") : "") + '</span><span style="color:' + C.dim + ';font-size:13px">⌄</span>';
+      d.appendChild(sum);
+      var b2 = document.createElement("div"); b2.style.cssText = "padding:2px 12px 12px";
+      var meta = []; if (ex.categorie) meta.push(ex.categorie); if (ex.duree != null && ex.duree !== "") meta.push(ex.duree + (typeof ex.duree === "number" ? " min" : ""));
+      if (meta.length) { var md = document.createElement("div"); md.style.cssText = "font-size:11px;color:" + C.dim + ";margin-bottom:10px"; md.textContent = meta.join(" · "); b2.appendChild(md); }
+      var ctr = document.createElement("div"); ctr.style.cssText = "display:flex;align-items:center;gap:10px";
+      var lab = document.createElement("div"); lab.style.cssText = "flex:1;font-size:12px;color:" + C.dim; lab.textContent = n > 0 ? ("fait " + n + " fois aujourd'hui") : "pas encore fait aujourd'hui";
+      var minus = document.createElement("button"); minus.textContent = "−"; minus.style.cssText = "width:34px;height:34px;border-radius:10px;border:1px solid " + C.border + ";background:transparent;color:" + C.dim + ";font-size:18px;cursor:pointer;flex-shrink:0";
+      var numEl = document.createElement("div"); numEl.textContent = n; numEl.style.cssText = "min-width:24px;text-align:center;font-size:17px;font-weight:800;color:" + C.gold;
+      var plus = document.createElement("button"); plus.textContent = "+"; plus.style.cssText = "width:40px;height:40px;border-radius:12px;border:none;background:" + C.ok + ";color:#fff;font-size:22px;font-weight:800;cursor:pointer;flex-shrink:0;box-shadow:0 2px 8px " + C.ok + "55";
+      function refresh(v) { numEl.textContent = v; lab.textContent = v > 0 ? ("fait " + v + " fois aujourd'hui") : "pas encore fait aujourd'hui"; var bd = sum.querySelector(".exh-badge"); bd.textContent = v > 0 ? ("✓ " + v + "×") : ""; bd.style.color = v > 0 ? C.ok : C.dim; }
+      plus.onclick = function (e) { e.preventDefault(); refresh(bumpTask(id, ex.id, 1)); };
+      minus.onclick = function (e) { e.preventDefault(); refresh(bumpTask(id, ex.id, -1)); };
+      ctr.appendChild(lab); ctr.appendChild(minus); ctr.appendChild(numEl); ctr.appendChild(plus);
+      b2.appendChild(ctr); d.appendChild(b2); sec.appendChild(d);
+    });
+    container.appendChild(sec);
+  }
+
+  function maybeAutoOpenDash() {
+    var s = session(); if (!s || s.role !== "client" || !s.clientId) return;
+    if (document.getElementById("exh-ov")) return;
+    var flag = "exhome_dash_auto_" + s.clientId;
+    try { if (sessionStorage.getItem(flag)) return; sessionStorage.setItem(flag, "1"); } catch (e) {}
+    openClientDash(s.clientId);
+  }
 })();
 </script>
 </body></html>
