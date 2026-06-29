@@ -611,8 +611,8 @@ react-dom/cjs/react-dom-client.production.js:
     if (!s) { if (btn) btn.remove(); return; }
     initRealtime();
     if (!btn) { btn = document.createElement("button"); btn.id = "exh-btn"; btn.style.cssText = btnStyle(); document.body.appendChild(btn); }
-    if (s.role === "coach") { btn.textContent = "✦ Tableau de bord"; btn.onclick = openDashboard; coachRecapNotif(); }
-    else if (s.role === "client" && s.clientId) { btn.textContent = "✦ Tableau de bord"; btn.onclick = openDashboard; maybeAutoOpenDash(); }
+    if (s.role === "coach") { btn.textContent = "⊞ Accueil"; btn.onclick = openLauncher; coachRecapNotif(); }
+    else if (s.role === "client" && s.clientId) { btn.textContent = "⊞ Accueil"; btn.onclick = openLauncher; maybeAutoOpenDash(); }
     else { btn.remove(); }
   }
   window.addEventListener("load", function () { setTimeout(refreshButton, 1500); });
@@ -1027,6 +1027,72 @@ react-dom/cjs/react-dom-client.production.js:
     } else if (nutBtn) { nutBtn.remove(); nutBtn = null; }
   }
   setInterval(refreshNutritionButton, 1000);
+  /* ===================== Écran d'accueil façon iPhone (lanceur de sections) v14 ===================== */
+  function targetClientId() {
+    var s = session();
+    if (s && s.role === "client" && s.clientId) return s.clientId;
+    if (s && s.role === "coach") {
+      var root = document.getElementById("root"), txt = (root && root.textContent) || "";
+      var m = coachClients().filter(function (c) { return c.nom && txt.indexOf(c.nom) > -1; });
+      if (m.length === 1) return m[0].id;
+    }
+    return null;
+  }
+  function clickNativeTab(word) {
+    var btns = document.querySelectorAll("#root button"), first = null;
+    for (var i = 0; i < btns.length; i++) {
+      var t = (btns[i].textContent || "").trim().replace(/^[^0-9A-Za-zÀ-ÿ]+/, "");
+      if (t.indexOf(word) === 0) {
+        var st = btns[i].getAttribute("style") || "";
+        if (st.indexOf("nowrap") > -1) { btns[i].click(); return true; }
+        if (!first) first = btns[i];
+      }
+    }
+    if (first) { first.click(); return true; }
+    return false;
+  }
+  function exhToast(msg) {
+    var t = document.createElement("div"); t.textContent = msg;
+    t.style.cssText = "position:fixed;left:50%;bottom:78px;transform:translateX(-50%);z-index:99999;max-width:88%;text-align:center;background:" + C.card + ";color:" + C.text + ";border:1px solid " + C.gold + "66;border-radius:10px;padding:10px 14px;font:600 13px system-ui,-apple-system,sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.5)";
+    document.body.appendChild(t); setTimeout(function () { t.remove(); }, 2400);
+  }
+  function openLauncher() {
+    var s = session(); if (!s) return;
+    var coach = s.role === "coach";
+    var box = overlay(); header(box, "⊞ Accueil");
+    var tid = targetClientId();
+    var sub = document.createElement("div"); sub.style.cssText = "font-size:12px;color:" + C.dim + ";margin:-6px 0 14px";
+    if (coach && tid) { var cc = coachClients().filter(function (x) { return x.id === tid; })[0]; sub.textContent = "Cliente : " + ((cc && cc.nom) || "") + " · touche une vignette"; }
+    else sub.textContent = "Touche une vignette pour ouvrir la section";
+    box.appendChild(sub);
+    var grid = document.createElement("div"); grid.style.cssText = "display:grid;grid-template-columns:repeat(auto-fill,minmax(94px,1fr));gap:14px";
+    function nat(emoji, label, word) { return { emoji: emoji, label: label, fn: function () { var o = document.getElementById("exh-ov"); if (o) o.remove(); if (!clickNativeTab(word)) exhToast("Ouvre d'abord une cliente pour « " + label + " »."); } }; }
+    function needId(opener) { return function () { var id = targetClientId(); if (id) opener(id); else if (coach) openCoach(); else exhToast("Section indisponible ici."); }; }
+    var tiles = [
+      { emoji: "📊", label: "Tableau de bord", fn: function () { openDashboard(); } },
+      nat("📋", "Programme", "Programme"),
+      nat("❤️", "Santé", "Santé"),
+      nat("🍽️", "Nutrition", "Nutrition"),
+      { emoji: "📝", label: "Bilan nutri", fn: needId(openNutritionAudit) },
+      { emoji: "📈", label: "Mesures", fn: needId(openMeasures) },
+      nat("🎯", "Objectifs", "Objectifs"),
+      nat("💧", "Hydratation", "Hydratation"),
+      nat("🏠", "Compteur", "Compteur"),
+      nat("📅", "Séances", "Séances"),
+      nat("💬", "Messages", "Messages"),
+      { emoji: "📷", label: "Scan balance", fn: needId(openScan) }
+    ];
+    if (coach) { tiles.push(nat("🔍", "Audit", "Audit")); tiles.push({ emoji: "🗂️", label: "Récap", fn: function () { openCoach(); } }); }
+    tiles.forEach(function (t) {
+      var b = document.createElement("button");
+      b.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:7px;background:" + C.surf + ";border:1px solid " + C.border + ";border-radius:18px;padding:14px 6px;cursor:pointer;color:" + C.text + ";font-family:inherit";
+      var em = document.createElement("div"); em.textContent = t.emoji; em.style.cssText = "font-size:28px;line-height:1";
+      var lb = document.createElement("div"); lb.textContent = t.label; lb.style.cssText = "font-size:11px;font-weight:600;text-align:center;color:" + C.text;
+      b.appendChild(em); b.appendChild(lb); b.onclick = t.fn;
+      grid.appendChild(b);
+    });
+    box.appendChild(grid);
+  }
 })();
 </script>
 </body></html>
