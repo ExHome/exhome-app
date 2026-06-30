@@ -135,7 +135,7 @@ var syncT;
 function setSync(msg){ var e=document.getElementById("sync"); if(!e) return; e.textContent=msg; e.style.display="block";
   clearTimeout(syncT); syncT=setTimeout(function(){ e.style.display="none"; }, 2600); }
 
-var APP_VERSION = "build 24 · 30 juin";
+var APP_VERSION = "build 35 · 30 juin";
 
 /* ---------- localStorage ---------- */
 function readLS(k){ try{ return JSON.parse(localStorage.getItem(k)); }catch(e){ return null; } }
@@ -149,7 +149,7 @@ function num(v){ var n=parseFloat(v); return isNaN(n)?null:n; }
 function fmtDate(iso){ if(!iso) return ""; var p=String(iso).slice(0,10).split("-"); return p.length===3 ? p[2]+"/"+p[1]+"/"+p[0] : iso; }
 function slugLogin(nom){ return nom.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z ]/g,"").trim().split(/\s+/).join("."); }
 
-function resizePhoto(file, cb){ var img=new Image(); img.onload=function(){ var max=240,w=img.naturalWidth,h=img.naturalHeight,s=Math.min(1,max/Math.max(w,h)); var cw=Math.round(w*s),ch=Math.round(h*s); var cv=document.createElement("canvas"); cv.width=cw; cv.height=ch; cv.getContext("2d").drawImage(img,0,0,cw,ch); try{ cb(cv.toDataURL("image/jpeg",0.72)); }catch(e){ cb(null); } }; img.onerror=function(){ cb(null); }; img.src=URL.createObjectURL(file); }
+function resizePhoto(file, cb){ var reader=new FileReader(); reader.onload=function(){ var img=new Image(); img.onload=function(){ try{ var max=240,w=img.naturalWidth||img.width,h=img.naturalHeight||img.height; if(!w||!h){ cb(null); return; } var s=Math.min(1,max/Math.max(w,h)); var cw=Math.round(w*s),ch=Math.round(h*s); var cv=document.createElement("canvas"); cv.width=cw; cv.height=ch; cv.getContext("2d").drawImage(img,0,0,cw,ch); cb(cv.toDataURL("image/jpeg",0.72)); }catch(e){ cb(null); } }; img.onerror=function(){ cb(null); }; img.src=reader.result; }; reader.onerror=function(){ cb(null); }; reader.readAsDataURL(file); }
 function avatarEl(c, size){ size=size||44; var d=el("div"); d.style.cssText="width:"+size+"px;height:"+size+"px;border-radius:50%;flex-shrink:0;background:var(--surf);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--gold);font-size:"+Math.round(size*0.4)+"px;overflow:hidden"; if(c && c.photo){ d.style.backgroundImage="url("+c.photo+")"; d.style.backgroundSize="cover"; d.style.backgroundPosition="center"; } else { d.textContent=((c&&c.nom)||"?").trim().slice(0,1).toUpperCase(); } return d; }
 
 /* ---------- ceintures (progression) ---------- */
@@ -205,6 +205,7 @@ function phraseCard(){
   return card;
 }
 ICONS.breath='<circle cx="12" cy="12" r="8.5"/><path d="M5 12c2-3.4 4.5 3.4 7 0s4.5-3.4 7 0" stroke="url(#exhOrange)"/>';
+ICONS.exo='<path d="M6.5 9.5 L6.5 14.5 M17.5 9.5 L17.5 14.5"/><path d="M4 10.5 L4 13.5 M20 10.5 L20 13.5"/><path d="M6.5 12 L17.5 12" stroke="url(#exhOrange)"/>';
 function iconSvg(key){ return '<svg viewBox="0 0 24 24">'+(ICONS[key]||"")+'</svg>'; }
 
 /* ============================================================================
@@ -214,7 +215,7 @@ function emptyClient(nom){
   return { id:genId(), nom:nom||"", login:slugLogin(nom||"cliente"), pin:"1234", photo:null,
     profil:{ age:"", taille:"", sexe:"", niveau:"" },
     objectifText:"", dateDebut:today(),
-    joursReussis:[], objectifs:[], mesures:[], sante:[], journal:[], programme:[], seances:[], messages:[], audit:{}, ergo:{}, ergoSquat:{}, ergoFente:{}, ergoHinge:{}, ergoEtages:{}, hydra:{}, cibles:{ basale:null },
+    joursReussis:[], objectifs:[], mesures:[], sante:[], journal:[], programme:[], seances:[], messages:[], petitsObjectifs:[], poValid:[], audit:{}, ergo:{}, ergoSquat:{}, ergoFente:{}, ergoHinge:{}, ergoEtages:{}, hydra:{}, cibles:{ basale:null },
     _mtime:0 };
 }
 function maxMerge(a,b){ a=a||{}; b=b||{}; var o={}; Object.keys(a).forEach(function(k){o[k]=a[k];}); Object.keys(b).forEach(function(k){ o[k]=Math.max(o[k]||0,b[k]||0); }); return o; }
@@ -237,6 +238,8 @@ function mergeClient(a, b){
   m.programme = unionBy((a.programme||[]).concat(b.programme||[]), function(x){ return x.id; });
   m.seances = unionBy((a.seances||[]).concat(b.seances||[]), function(x){ return x.id; });
   m.messages = unionBy((a.messages||[]).concat(b.messages||[]), function(x){ return x.id; });
+  m.petitsObjectifs = unionBy((a.petitsObjectifs||[]).concat(b.petitsObjectifs||[]), function(x){ return x.id; });
+  m.poValid = Array.from(new Set((a.poValid||[]).concat(b.poValid||[]))).sort();
   m.ergo = maxMerge(a.ergo, b.ergo);
   m.ergoSquat = maxMerge(a.ergoSquat, b.ergoSquat);
   m.ergoFente = maxMerge(a.ergoFente, b.ergoFente);
@@ -459,7 +462,13 @@ function openClient(id, isSelf){
 
     // bonjour + phrase du jour
     var helloRow=el("div"); helloRow.style.cssText="display:flex;align-items:center;gap:11px;margin:2px 0 14px";
-    helloRow.appendChild(avatarEl(c,46));
+    var avWrap=el("div"); avWrap.style.cssText="position:relative;cursor:pointer;flex-shrink:0";
+    avWrap.appendChild(avatarEl(c,46));
+    var camBadge=el("div"); camBadge.style.cssText="position:absolute;right:-3px;bottom:-3px;width:20px;height:20px;border-radius:50%;background:var(--gold);color:#0F2820;font-size:11px;display:flex;align-items:center;justify-content:center;border:2px solid var(--bg)"; camBadge.textContent="📷"; avWrap.appendChild(camBadge);
+    var avPick=document.createElement("input"); avPick.type="file"; avPick.accept="image/*"; avPick.style.display="none"; avWrap.appendChild(avPick);
+    avWrap.onclick=function(){ avPick.click(); };
+    avPick.onchange=function(){ var f=this.files[0]; if(!f) return; toast("Chargement de la photo…"); resizePhoto(f,function(data){ if(!data){ toast("Photo illisible, réessaie avec une autre."); return; } c.photo=data; saveClient(c).then(function(m){ Object.assign(c,m); toast("Photo enregistrée 📸"); openClient(c.id,isSelf); }); }); };
+    helloRow.appendChild(avWrap);
     var hello=el("div"); hello.style.cssText="font-size:16px;font-weight:600"; hello.innerHTML="Bonjour "+esc(((c.nom||"").trim().split(" ")[0])||"")+" 👋";
     helloRow.appendChild(hello); app.appendChild(helloRow);
     app.appendChild(phraseCard());
@@ -473,6 +482,7 @@ function openClient(id, isSelf){
     head.style.cursor="pointer"; head.onclick=function(){ screenProgression(c,isSelf); };
     app.appendChild(head);
     app.appendChild(homeErgo(c, isSelf));
+    var _po=poCard(c, isSelf); if(_po) app.appendChild(_po);
     app.appendChild(scienceCard(function(){ openPresentation(function(){ openClient(c.id,isSelf); }); }));
 
     // accueil — tuiles premium identiques au launcher
@@ -500,6 +510,7 @@ function openClient(id, isSelf){
     appIcon("target","Objectifs", function(){ screenObjectifs(c, isSelf); });
     appIcon("food","Nutrition", function(){ openFoodJournal(c, isSelf); });
     appIcon("apple","Bibliothèque", function(){ openFoodLib(function(){ openClient(c.id,isSelf); }, function(food){ qtyAdd(food, c, isSelf); }); });
+    appIcon("exo","Exercices", function(){ openExoLib(c, isSelf); });
     appIcon("dash","Tableau de bord", function(){ openDashboard(c, isSelf); });
     appIcon("list","Programme", function(){ openProgramme(c, isSelf); });
     appIcon("calendar","Séances", function(){ openSeances(c, isSelf); });
@@ -509,6 +520,7 @@ function openClient(id, isSelf){
     appIcon("search","Audit découverte", function(){ openAudit(c, isSelf); });
     appIcon("user","Profil", function(){ screenProfil(c, isSelf); });
     app.appendChild(grid);
+    app.appendChild(syncButton(c, isSelf));
     var foot=el("div","center muted"); foot.style.cssText="margin-top:30px;font-size:11px;letter-spacing:.04em"; foot.textContent="Ex Home v2 · "+APP_VERSION; app.appendChild(foot);
   });
 }
@@ -558,14 +570,18 @@ function screenProgression(c, isSelf){
 
 /* ---------- MESURES (source unique) ---------- */
 var MES_FIELDS = [
-  { k:"poids",        lab:"Poids",            u:"kg" },
-  { k:"graisse",      lab:"Masse grasse",     u:"%"  },
-  { k:"muscle",       lab:"Masse musculaire", u:"%"  },
-  { k:"eau",          lab:"Eau",              u:"%"  },
-  { k:"imc",          lab:"IMC",              u:""   },
-  { k:"tourTaille",   lab:"Tour de taille",   u:"cm" },
-  { k:"tourHanches",  lab:"Tour de hanches",  u:"cm" },
-  { k:"fcRepos",      lab:"FC au repos",      u:"bpm"}
+  { k:"poids",        lab:"Poids",             u:"kg"   },
+  { k:"graisse",      lab:"Masse grasse",      u:"%"    },
+  { k:"muscle",       lab:"Masse musculaire",  u:"%"    },
+  { k:"eau",          lab:"Eau",               u:"%"    },
+  { k:"proteines",    lab:"Protéines",         u:"%"    },
+  { k:"osseuse",      lab:"Masse osseuse",     u:"kg"   },
+  { k:"viscerale",    lab:"Graisse viscérale", u:""     },
+  { k:"bmr",          lab:"Métabolisme basal", u:"kcal" },
+  { k:"imc",          lab:"IMC",               u:""     },
+  { k:"tourTaille",   lab:"Tour de taille",    u:"cm"   },
+  { k:"tourHanches",  lab:"Tour de hanches",   u:"cm"   },
+  { k:"fcRepos",      lab:"FC au repos",       u:"bpm"  }
 ];
 function visibleMes(c){ return (c.mesures||[]).filter(function(m){ return !m.del; }).sort(function(a,b){ return (b.date||"").localeCompare(a.date||"")||((b._ts||0)-(a._ts||0)); }); }
 
@@ -647,6 +663,16 @@ function screenObjectifs(c, isSelf){
   var ni=input("",{placeholder:"Nouvel objectif (ex : bouger 10 min/jour)"});
   var add=el("button","btn primary block","Ajouter"); add.style.marginTop="4px";
   addCard.appendChild(field("Ajouter un objectif", ni)); addCard.appendChild(add); app.appendChild(addCard);
+  if(!isSelf){
+    var poE=el("div","card"); poE.appendChild(el("div","eyebrow","Petits objectifs du jour (cochés chaque jour)")); var posp=el("div"); posp.style.height="8px"; poE.appendChild(posp);
+    var poIn=input("",{placeholder:"Ex : Boire un verre d'eau au réveil"});
+    var poAdd=el("button","btn primary block","Ajouter un petit objectif"); poAdd.style.marginTop="4px";
+    poE.appendChild(field("Nouveau petit objectif", poIn)); poE.appendChild(poAdd);
+    poAdd.onclick=function(){ var v=(poIn.value||"").trim(); if(!v) return; c.petitsObjectifs=(c.petitsObjectifs||[]).concat([{id:genId(),texte:v,_ts:Date.now()}]); saveClient(c).then(function(mc){ Object.assign(c,mc); screenObjectifs(c,isSelf); }); };
+    var pol=(c.petitsObjectifs||[]).filter(function(o){return !o.del;});
+    if(pol.length){ var plist=el("div"); plist.style.marginTop="10px"; pol.forEach(function(o){ var r=el("div","line"); r.innerHTML='<span class="k">🌱 '+esc(o.texte)+'</span>'; var xb=el("button","back"); xb.textContent="✕"; xb.style.cssText="font-size:12px;padding:4px 9px"; xb.onclick=function(){ o.del=true; o._ts=Date.now(); saveClient(c).then(function(mc){ Object.assign(c,mc); screenObjectifs(c,isSelf); }); }; r.appendChild(xb); plist.appendChild(r); }); poE.appendChild(plist); }
+    app.appendChild(poE);
+  }
   add.onclick=function(){
     var v=(ni.value||"").trim(); if(!v) return;
     c.objectifs=(c.objectifs||[]).concat([{ id:genId(), texte:v, fait:false, _ts:Date.now() }]);
@@ -732,6 +758,14 @@ function openSoon(label, back){
   app.appendChild(card);
 }
 
+var MOVE_ICONS={
+  ergoSquat:'<circle cx="8.4" cy="5" r="2"/><path d="M8.4 7 L11 12.4"/><path d="M9 8.6 L14.6 9.6"/><path d="M11 12.4 L16.6 12.4"/><path d="M16.6 12.4 L16.6 18"/><path d="M5.5 18.4 H18.5" stroke="url(#exhOrange)"/>',
+  ergoFente:'<circle cx="10" cy="5" r="2"/><path d="M10 7 L10 12"/><path d="M10 12 L14.6 14 L14.6 18"/><path d="M10 12 L6 16 L4 18"/><path d="M3 18.4 H19" stroke="url(#exhOrange)"/>',
+  ergoHinge:'<circle cx="5" cy="8" r="2"/><path d="M6.7 9 L13 12 L13 18"/><path d="M8.2 10 L8.8 14.4"/><path d="M9 18.4 H18.5" stroke="url(#exhOrange)"/>',
+  ergoEtages:'<path d="M4 19 L8 19 L8 15 L12 15 L12 11 L16 11 L16 7 L20 7"/><path d="M5.6 9 L8.1 6.4 L10.6 9" stroke="url(#exhOrange)"/>'
+};
+var MOVE_EMOJI={ergoSquat:"🦵",ergoFente:"🏃",ergoHinge:"🔄",ergoEtages:"🪜"};
+function movePlateHTML(key, sz){ sz=sz||48; var ic=Math.round(sz*0.55); return '<div style="width:'+sz+'px;height:'+sz+'px;border-radius:15px;padding:1.5px;background:linear-gradient(145deg,#F4DE9C 0%,#C9A84C 46%,#8C6826 100%);box-shadow:0 4px 11px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.35);flex-shrink:0"><div style="width:100%;height:100%;border-radius:13.5px;display:flex;align-items:center;justify-content:center;background:radial-gradient(130% 115% at 50% 0%,#1C4231 0%,#0E2419 55%,#081310 100%);box-shadow:inset 0 -6px 11px rgba(0,0,0,.45),inset 0 1px 1px rgba(255,255,255,.06)"><span style="font-size:'+Math.round(sz*0.5)+'px;line-height:1;filter:grayscale(1) sepia(1) saturate(2.6) hue-rotate(-3deg) brightness(1.08) drop-shadow(0 1px 1px rgba(0,0,0,.5))">'+(MOVE_EMOJI[key]||"")+'</span></div></div>'; }
 var MOVE_SVG={ ergoSquat:'<svg viewBox="0 0 200 200" width="30" height="30"><g fill="none" stroke="url(#exhGold)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"><circle cx="88" cy="38" r="14"/><path d="M88 52 L80 98"/><path d="M86 66 L126 74"/><path d="M80 98 L122 104"/><path d="M122 104 L122 162"/><path d="M122 162 L146 162"/></g><g stroke="none"><circle cx="122" cy="104" r="5" fill="url(#exhOrange)"/><circle cx="80" cy="98" r="4" fill="url(#exhOrange)"/></g></svg>', ergoFente:'<svg viewBox="0 0 200 200" width="30" height="30"><g fill="none" stroke="url(#exhGold)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"><circle cx="92" cy="34" r="14"/><path d="M92 48 L92 98"/><path d="M92 60 L112 80"/><path d="M92 98 L124 120"/><path d="M124 120 L124 162"/><path d="M124 162 L146 162"/><path d="M92 98 L64 124"/><path d="M64 124 L48 162"/><path d="M48 162 L34 162"/></g><g stroke="none"><circle cx="124" cy="120" r="5" fill="url(#exhOrange)"/></g></svg>', ergoHinge:'<svg viewBox="0 0 200 200" width="30" height="30"><g fill="none" stroke="url(#exhGold)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"><circle cx="42" cy="74" r="14"/><path d="M56 80 L48 78"/><path d="M108 96 L56 80"/><path d="M108 96 L112 130"/><path d="M112 130 L116 162"/><path d="M116 162 L138 162"/><path d="M56 80 L52 116"/></g><g stroke="none"><circle cx="108" cy="96" r="5" fill="url(#exhOrange)"/><circle cx="112" cy="130" r="5" fill="url(#exhOrange)"/></g></svg>' };
 function ergoDay(c, key){ return (((c.ergoSquat||{})[key])||0)+(((c.ergoFente||{})[key])||0)+(((c.ergoHinge||{})[key])||0); }
 function ergoTotalMap(c){ var m={}; ["ergoSquat","ergoFente","ergoHinge"].forEach(function(k){ var o=c[k]||{}; Object.keys(o).forEach(function(d){ m[d]=(m[d]||0)+(o[d]||0); }); }); return m; }
@@ -758,7 +792,7 @@ function screenCompteur(c, isSelf){
       row.style.borderLeft="3px solid "+t.col;
       row.innerHTML='<div class="row" style="justify-content:space-between;align-items:center">'
         +'<div style="display:flex;align-items:center;gap:12px">'
-          +'<span style="width:48px;height:48px;border-radius:14px;background:linear-gradient(150deg,#10301F,#0A1A12);border:1px solid '+t.col+';display:flex;align-items:center;justify-content:center;font-size:25px;flex-shrink:0">'+t.emoji+'</span>'
+          +movePlateHTML(t.k,48)
           +'<div><div style="font-weight:700;font-size:15px">'+t.lab+'</div><div class="muted" style="font-size:11px;line-height:1.35;margin-top:2px">'+t.desc+'</div></div>'
         +'</div>'
         +'<div style="font-size:24px;font-weight:800;color:'+t.col+'">'+v+'</div></div>';
@@ -798,21 +832,28 @@ function screenSante(c, isSelf){
   clear(); topbar("Santé du jour", c.nom, function(){ openClient(c.id,isSelf); });
   c.sante=c.sante||[];
   var emos=["😞","😕","😐","🙂","😄"]; var hum=0;
+  var HUM_FILTERS=["grayscale(1) sepia(1) saturate(2.2) hue-rotate(80deg) brightness(0.98)","grayscale(1) sepia(1) saturate(2.4) hue-rotate(55deg) brightness(1.0)","grayscale(1) sepia(1) saturate(2.6) hue-rotate(25deg) brightness(1.05)","grayscale(1) sepia(1) saturate(3.2) hue-rotate(5deg) brightness(1.06)","grayscale(1) sepia(1) saturate(4.2) hue-rotate(-12deg) brightness(1.08)"];
+  var HUM_BORDERS=["#6FCF97","#8FD07A","#C9C24C","#E0A52E","#E0852E"];
   var card=el("div","card");
   card.appendChild(el("div","eyebrow","Comment tu te sens aujourd'hui ?"));
   var sp=el("div"); sp.style.height="12px"; card.appendChild(sp);
   var humRow=el("div"); humRow.style.cssText="display:flex;gap:8px;margin-bottom:6px"; var humBtns=[];
-  emos.forEach(function(e,i){ var b=el("button"); b.textContent=e; b.style.cssText="flex:1;font-size:25px;background:var(--surf);border:1px solid var(--border);border-radius:12px;padding:8px;cursor:pointer;opacity:.45"; b.onclick=function(){ hum=i+1; humBtns.forEach(function(x,j){ x.style.opacity=j===i?"1":".4"; x.style.borderColor=j===i?"var(--gold)":"var(--border)"; }); }; humBtns.push(b); humRow.appendChild(b); });
+  emos.forEach(function(e,i){ var b=el("button"); b.textContent=e; b.style.cssText="flex:1;font-size:25px;background:var(--surf);border:1px solid var(--border);border-radius:12px;padding:8px;cursor:pointer;opacity:.45"; b.style.filter=HUM_FILTERS[i]; b.onclick=function(){ hum=i+1; humBtns.forEach(function(x,j){ x.style.opacity=j===i?"1":".4"; x.style.borderColor=j===i?HUM_BORDERS[j]:"var(--border)"; }); }; humBtns.push(b); humRow.appendChild(b); });
   card.appendChild(field("Humeur", humRow));
   var sommeil=input("",{type:"number",inputmode:"decimal",placeholder:"heures"});
   var stress=el("select","inp"); ["","Faible","Modéré","Élevé"].forEach(function(o){ var op=document.createElement("option"); op.value=o; op.textContent=o||"Niveau de stress…"; stress.appendChild(op); });
   var two=el("div","two"); two.appendChild(field("Sommeil (h)", sommeil)); two.appendChild(field("Stress", stress)); card.appendChild(two);
+  var RPE_COLORS=["#6FCF97","#83CC86","#97C976","#ABC665","#BFC354","#CBBB49","#D1AE42","#D6A03B","#DB9335","#E0852E"];
+  var rpe=0, rpeBtns=[];
+  var rpeRow=el("div"); rpeRow.style.cssText="display:flex;gap:4px";
+  RPE_COLORS.forEach(function(col,i){ var n=i+1; var rb=el("button"); rb.textContent=n; rb.style.cssText="flex:1;font-size:13px;font-weight:700;color:#0F2820;background:"+col+";opacity:.32;border:1px solid var(--border);border-radius:9px;padding:9px 0;cursor:pointer;font-family:inherit"; rb.onclick=function(){ rpe=n; rpeBtns.forEach(function(x,j){ x.style.opacity=j===i?"1":".32"; }); }; rpeBtns.push(rb); rpeRow.appendChild(rb); });
+  card.appendChild(field("Effort perçu — RPE (1 facile → 10 maximal)", rpeRow));
   var note=input("",{placeholder:"Note (optionnel)"}); card.appendChild(field("Note", note));
   var save=el("button","btn primary block","Enregistrer"); card.appendChild(save); app.appendChild(card);
-  save.onclick=function(){ c.sante=c.sante.concat([{id:genId(),date:today(),humeur:hum||null,sommeil:num(sommeil.value),stress:stress.value,note:note.value,_ts:Date.now()}]); save.disabled=true; save.textContent="Enregistrement…"; saveClient(c).then(function(m){ Object.assign(c,m); toast("Enregistré"); screenSante(c,isSelf); }); };
+  save.onclick=function(){ c.sante=c.sante.concat([{id:genId(),date:today(),humeur:hum||null,sommeil:num(sommeil.value),stress:stress.value,rpe:rpe||null,note:note.value,_ts:Date.now()}]); save.disabled=true; save.textContent="Enregistrement…"; saveClient(c).then(function(m){ Object.assign(c,m); toast("Enregistré"); screenSante(c,isSelf); }); };
   var hist=(c.sante||[]).filter(function(x){return !x.del;}).sort(function(a,b){return (b.date||"").localeCompare(a.date||"");}).slice(0,10);
   if(hist.length){ var hc=el("div","card"); hc.appendChild(el("div","eyebrow","Historique")); var s2=el("div"); s2.style.height="8px"; hc.appendChild(s2);
-    hist.forEach(function(x){ var l=el("div","line"); var em=emos[(x.humeur||0)-1]||"–"; l.innerHTML='<span class="k">'+fmtDate(x.date)+'</span><span class="v">'+em+(x.sommeil?" · "+x.sommeil+"h":"")+(x.stress?" · "+esc(x.stress):"")+'</span>'; hc.appendChild(l); });
+    hist.forEach(function(x){ var l=el("div","line"); var em=emos[(x.humeur||0)-1]||"–"; l.innerHTML='<span class="k">'+fmtDate(x.date)+'</span><span class="v">'+em+(x.sommeil?" · "+x.sommeil+"h":"")+(x.stress?" · "+esc(x.stress):"")+(x.rpe?" · RPE "+x.rpe:"")+'</span>'; hc.appendChild(l); });
     app.appendChild(hc); }
 }
 
@@ -1301,6 +1342,8 @@ function openFoodJournal(c, isSelf){
   app.appendChild(head);
   var add=el("button","btn primary block","+ Ajouter un aliment"); add.style.marginBottom="14px"; app.appendChild(add);
   add.onclick=function(){ openFoodLib(function(){ openFoodJournal(c,isSelf); }, function(food){ qtyAdd(food,c,isSelf); }); };
+  var aiBtn=el("button","btn line block","📸 Reconnaître un plat (IA)"); aiBtn.style.marginBottom="14px"; app.appendChild(aiBtn);
+  aiBtn.onclick=function(){ openFoodAI(c,isSelf); };
   MEALS.forEach(function(meal){
     var list=entries.filter(function(e){return e.meal===meal;}); if(!list.length) return;
     var card=el("div","card"); card.appendChild(el("div","eyebrow",meal)); var sp=el("div"); sp.style.height="8px"; card.appendChild(sp);
@@ -1337,6 +1380,8 @@ function openFoodLib(backFn, onPickFood){
   var scan=el("button","btn ghost","📷"); scan.style.padding="12px 14px";
   bar.appendChild(search); bar.appendChild(scan); app.appendChild(bar);
   var addBtn=el("button","btn line block","+ Créer un aliment"); addBtn.style.marginBottom="12px"; app.appendChild(addBtn);
+  var onlineBtn=el("button","btn line block","🌐 Chercher en ligne (Open Food Facts · Nutri-Score)"); onlineBtn.style.marginBottom="12px"; app.appendChild(onlineBtn);
+  onlineBtn.onclick=function(){ openOFFSearch((search.value||"").trim(), function(){ openFoodLib(backFn,onPickFood); }, onPickFood); };
   var listWrap=el("div"); app.appendChild(listWrap);
   listWrap.appendChild(el("div","muted center","Chargement…"));
   scan.onclick=function(){ openBarcode(function(){ openFoodLib(backFn,onPickFood); }, onPickFood); };
@@ -1346,7 +1391,18 @@ function openFoodLib(backFn, onPickFood){
       var q=(search.value||"").trim().toLowerCase();
       var foods=lib.foods.filter(function(f){ return !q||(f.nom||"").toLowerCase().indexOf(q)>-1; }).slice(0,40);
       listWrap.innerHTML="";
-      if(!foods.length){ listWrap.appendChild(el("div","card center muted","Aucun aliment. Crée-le ci-dessus.")); return; }
+      if(!foods.length){
+        if(q){
+          var nf=el("div","card center");
+          nf.innerHTML='<div class="muted" style="font-size:13px;margin-bottom:10px;line-height:1.5">Aucun aliment « '+esc(search.value.trim())+' » dans ta bibliothèque. Cherchons-le en ligne :</div>';
+          var ob=el("button","btn primary block","🌐 Chercher « "+esc(search.value.trim())+" » en ligne");
+          ob.onclick=function(){ openOFFSearch(search.value.trim(), function(){ openFoodLib(backFn,onPickFood); }, onPickFood); };
+          nf.appendChild(ob); listWrap.appendChild(nf);
+        } else {
+          listWrap.appendChild(el("div","card center muted","Aucun aliment. Crée-le ci-dessus, ou cherche en ligne."));
+        }
+        return;
+      }
       foods.forEach(function(f){
         var card=el("div","card"); card.style.cssText+=";cursor:pointer;padding:13px 16px";
         card.innerHTML='<div style="display:flex;justify-content:space-between;gap:10px"><div style="font-weight:600">'+esc(f.nom)+'</div><div class="muted" style="font-size:12px;white-space:nowrap">'+f.kcal+' kcal /'+f.base+f.unit+'</div></div><div class="muted" style="font-size:11px;margin-top:3px">P '+f.p+' · G '+f.g+' · L '+f.l+'</div>';
@@ -1383,7 +1439,7 @@ function renderProduct(prod, host, onPickFood, backFn){
     +'<div class="line"><span class="k">Protéines</span><span class="v">'+prod.p+' g</span></div>'
     +'<div class="line"><span class="k">Glucides</span><span class="v">'+prod.g+' g</span></div>'
     +'<div class="line"><span class="k">Lipides</span><span class="v">'+prod.l+' g</span></div>'
-    +(prod.nutriscore&&"ABCDE".indexOf(prod.nutriscore)>-1?'<div class="line"><span class="k">Nutri-Score</span><span class="v">'+prod.nutriscore+'</span></div>':'')
+    +(prod.nutriscore&&"ABCDE".indexOf(prod.nutriscore)>-1?'<div class="line"><span class="k">Nutri-Score</span><span class="v">'+nutriScoreBadge(prod.nutriscore)+'</span></div>':'')
     +(prod.nova?'<div class="line"><span class="k">Transformation</span><span class="v">NOVA '+prod.nova+'</span></div>':'');
   card.appendChild(nut);
   if(prod.allergens){ var al=el("div"); al.style.cssText="font-size:12px;color:var(--orange);margin-bottom:10px"; al.textContent="⚠️ Allergènes : "+prod.allergens; card.appendChild(al); }
@@ -1939,7 +1995,7 @@ function homeErgo(c, isSelf){
   }
   T.forEach(function(t){
     var b=el("button"); b.style.cssText="display:flex;flex-direction:column;align-items:center;gap:2px;background:linear-gradient(150deg,#10301F,#0A1A12);border:1px solid "+t.col+";border-radius:16px;padding:12px 6px;cursor:pointer;color:var(--text);font-family:inherit;transition:transform .1s ease";
-    var em=el("div"); em.style.cssText="font-size:23px"; em.textContent=t.emoji;
+    var em=el("div"); em.style.cssText="line-height:0"; em.innerHTML=movePlateHTML(t.k,42);
     var cnt=el("div"); cnt.style.cssText="font-size:20px;font-weight:800;color:"+t.col; cnt.textContent=(c[t.k][today()]||0); countEls[t.k]=cnt;
     var lb=el("div"); lb.style.cssText="font-size:11px;font-weight:600;opacity:.85"; lb.textContent="+1 "+t.lab;
     b.appendChild(em); b.appendChild(cnt); b.appendChild(lb);
@@ -1957,6 +2013,162 @@ function homeErgo(c, isSelf){
   var link=el("button","btn ghost block","Détail : étages, semaine, corrections"); link.style.marginTop="12px"; link.onclick=function(){ screenCompteur(c,isSelf); }; card.appendChild(link);
   refresh();
   return card;
+}
+
+function syncButton(c, isSelf){
+  var wrap=el("div"); wrap.style.cssText="margin-top:14px";
+  var b=el("button","btn line block","💾 Enregistrer / Synchroniser mes données");
+  var st=el("div","muted"); st.style.cssText="font-size:11px;text-align:center;margin-top:7px;line-height:1.4"; st.textContent="Tes données sont sauvegardées automatiquement. Ce bouton force une synchronisation, par sécurité.";
+  b.onclick=function(){
+    b.disabled=true; b.textContent="Synchronisation…";
+    Promise.resolve(saveClient(c)).then(function(m){
+      if(m) Object.assign(c,m);
+      var t=new Date(); var hh=String(t.getHours()).padStart(2,"0"), mm=String(t.getMinutes()).padStart(2,"0");
+      b.disabled=false; b.textContent="✓ Synchronisé";
+      st.textContent="Dernière synchronisation : "+hh+":"+mm+" ✓";
+      toast("Données synchronisées ✓");
+      setTimeout(function(){ if(b) b.textContent="💾 Enregistrer / Synchroniser mes données"; },2600);
+    }).catch(function(){
+      b.disabled=false; b.textContent="💾 Enregistrer / Synchroniser mes données";
+      toast("Synchro impossible — réessaie dans un instant.");
+    });
+  };
+  wrap.appendChild(b); wrap.appendChild(st); return wrap;
+}
+
+var EXO_CATS=["Ergo-ménager","Posture","Mobilité","Renforcement","Gainage","Respiration"];
+var EXERCISES=[{titre:"Ancrage debout – pieds parallèles",cat:"Posture",duree:5,desc:"Se tenir debout, pieds à la largeur des hanches, sentir le poids se répartir sur les 3 points du pied."},{titre:"Correction posture assise",cat:"Posture",duree:3,desc:"Observer et ajuster la position assise : bassin, colonne, épaules, regard horizontal."},{titre:"Étirement pectoral au mur",cat:"Mobilité",duree:3,desc:"Placer la main sur un mur à hauteur d'épaule, tourner le corps vers l'opposé. Tenir 30s, répéter 3 fois."},{titre:"Chin tuck – rétraction cervicale",cat:"Mobilité",duree:3,desc:"Assis droit, rentrer le menton vers la gorge (double menton). 10 répétitions lentes."},{titre:"Shoulder blade squeeze",cat:"Renforcement",duree:4,desc:"Rapprocher les omoplates en gardant les épaules basses. 10 répétitions, 3 séries."},{titre:"Gainage latéral",cat:"Gainage",duree:8,desc:"Planche latérale sur avant-bras, aligner tête-hanches-pieds. 30s par côté, 3 séries."},{titre:"Renforcement lombaire – bird-dog",cat:"Renforcement",duree:10,desc:"À quatre pattes, tendre bras droit + jambe gauche simultanément. 10 rép. chaque côté."},{titre:"Rotation cervicale lente",cat:"Mobilité",duree:3,desc:"Tourner lentement la tête gauche-droite, 5 fois de chaque côté. Respiration continue."},{titre:"Ouverture des hanches – figure 4",cat:"Mobilité",duree:8,desc:"Allongé sur le dos, croiser la cheville droite sur la cuisse gauche, tirer vers soi. 45s par côté."},{titre:"Rotation thoracique assis",cat:"Mobilité",duree:5,desc:"Assis sur un tabouret, croiser les bras sur les épaules, tourner le buste à droite et à gauche. 10 rép."},{titre:"Mobilisation chevilles – cercles",cat:"Mobilité",duree:3,desc:"Assis, faire des grands cercles avec les pieds dans les deux sens. 10 fois chaque direction."},{titre:"Étirement ischios – hamstrings debout",cat:"Mobilité",duree:5,desc:"Debout, poser le talon sur une chaise, garder le dos droit et pencher légèrement le buste en avant."},{titre:"Ouverture épaules – Eagle arms",cat:"Mobilité",duree:4,desc:"Enrouler les bras l'un autour de l'autre à hauteur d'épaule. Lever les coudes. 30s par côté."},{titre:"Squat assis-debout lent",cat:"Renforcement",duree:6,desc:"S'asseoir et se lever d'une chaise en 4 temps, sans utiliser les mains. 10 répétitions."},{titre:"Gainage ventral – 3 séries",cat:"Gainage",duree:10,desc:"Position planche sur avant-bras. Tenir 30s, 3 séries avec 30s de repos."},{titre:"Pont fessier",cat:"Renforcement",duree:8,desc:"Allongé sur le dos, pieds à plat, soulever le bassin jusqu'à aligner hanches et épaules. 15 rép, 3 séries."},{titre:"Squat au poids du corps",cat:"Renforcement",duree:10,desc:"Pieds à la largeur des épaules, descendre comme pour s'asseoir. 15 répétitions, 3 séries."},{titre:"Pompes sur les genoux",cat:"Renforcement",duree:8,desc:"Mains au sol largeur épaules, genoux posés. Fléchir les coudes jusqu'à effleurer le sol. 10 rép, 3 séries."},{titre:"Fentes avant alternées",cat:"Renforcement",duree:10,desc:"Pas en avant, fléchir les deux genoux à 90°, revenir. 10 rép par jambe, 3 séries."},{titre:"Superman dorsal",cat:"Renforcement",duree:6,desc:"À plat ventre, lever simultanément les bras et les jambes. Tenir 3s, 10 répétitions."},{titre:"Step-up sur marche",cat:"Renforcement",duree:8,desc:"Monter et descendre d'une marche en alternant les jambes. 20 répétitions, 3 séries."},{titre:"Cohérence cardiaque 5-5",cat:"Respiration",duree:5,desc:"Inspirer 5 secondes, expirer 5 secondes. 6 cycles par minute pendant 5 minutes."},{titre:"Respiration abdominale profonde",cat:"Respiration",duree:5,desc:"Main sur le ventre, gonfler le ventre à l'inspiration, dégonfler à l'expiration. 10 cycles."},{titre:"Respiration 4-7-8 (anti-stress)",cat:"Respiration",duree:5,desc:"Inspirer 4s, retenir 7s, expirer lentement 8s. 4 cycles. Puissant avant le coucher."},{titre:"Scan corporel + respiration",cat:"Respiration",duree:10,desc:"Allongé, parcourir chaque partie du corps en la relâchant consciemment avec l'expiration."},{titre:"Box breathing (militaire)",cat:"Respiration",duree:5,desc:"Inspirer 4s, retenir 4s, expirer 4s, retenir 4s. 6 cycles. Idéal avant un moment stressant."},{titre:"Respiration alternée des narines",cat:"Respiration",duree:5,desc:"Fermer la narine droite, inspirer à gauche. Fermer la gauche, expirer à droite. 5 cycles."},{titre:"Vaisselle à la main – Relevés de talons",cat:"Ergo-ménager",duree:15,desc:"Pendant la vaisselle : relevés de talons alternés toutes les 2 min. Pieds parallèles, genoux déverrouillés. Renforce mollets et périnée."},{titre:"Vaisselle à la main – Équilibre unipodal",cat:"Ergo-ménager",duree:15,desc:"Tenir sur une jambe 30s en faisant la vaisselle, alterner. Renforce proprioception, cheville et stabilisateurs du genou."},{titre:"Vaisselle à la main – Gainage debout",cat:"Ergo-ménager",duree:15,desc:"Contracter abdominaux et fessiers en expirant toutes les 2 min. Maintenir 10s. Posture colonne neutre contre l'évier."},{titre:"Préparation des repas – Station ergonomique",cat:"Renforcement",duree:20,desc:"Pieds parallèles, genoux fléchis 5°, planche à hauteur des coudes. Transfert de poids d'une jambe à l'autre toutes les 30s. Renforce stabilité posturale."},{titre:"Préparation des repas – Squats entre étapes",cat:"Renforcement",duree:20,desc:"Entre chaque étape de la recette (pendant que ça cuit, bout, etc.) : 10 squats lents au poids du corps. Cuisses, fessiers, dos."},{titre:"Remplir / vider le lave-vaisselle – Squat profond",cat:"Ergo-ménager",duree:10,desc:"Chaque plat en bas = squat profond dos droit (pas flexion lombaire). Chaque rangement en haut = élévation sur pointes + gainage épaules."},{titre:"Remplir / vider le lave-vaisselle – Hinge hip",cat:"Ergo-ménager",duree:10,desc:"Pour charger le bas du lave-vaisselle : hinge strict (charnière hanche, dos neutre). Renforce ischios-jambiers et érecteurs du rachis."},{titre:"Ranger les courses – Farmer's walk",cat:"Ergo-ménager",duree:15,desc:"Porter les sacs comme un farmer's walk : abdos engagés, épaules basses et dans l'axe, pas réguliers. Renforce trapèzes, abdos, avant-bras."},{titre:"Ranger les courses – Squats avec charge",cat:"Ergo-ménager",duree:10,desc:"Avant de ranger : 5 squats lents avec les packs d'eau ou sacs de courses. Charge fonctionnelle, renforce quadriceps et fessiers."},{titre:"Vider les poubelles – Hinge & portage",cat:"Renforcement",duree:5,desc:"Saisir le sac en hinge (dos droit, poussée par les talons). Porter en gainage actif jusqu'au bac. Renforce chaîne postérieure et core."},{titre:"Passer l'aspirateur – Fentes alternées",cat:"Ergo-ménager",duree:20,desc:"Avancer en fente à chaque poussée : jambe avant 90°, jambe arrière tendue, dos droit. Alterner droite/gauche. Renforce quadriceps, fessiers, ischios."},{titre:"Passer l'aspirateur – Pivot des hanches",cat:"Ergo-ménager",duree:20,desc:"Pivoter sur les pieds (pas tordre la colonne) à chaque changement de direction. Renforce mobilité rotateurs de hanche et stabilité lombaire."},{titre:"Balayer / passer la serpillière – Fentes latérales",cat:"Renforcement",duree:20,desc:"Chaque passage large = fente latérale : jambe portante fléchie, jambe opposée tendue. Renforce adducteurs, abducteurs, fessiers."},{titre:"Balayer / passer la serpillière – Gainage de marche",cat:"Gainage",duree:20,desc:"Serrer les abdominaux et contracter les fessiers à chaque pas. Maintenir la colonne neutre tout le long. Endurance musculaire posturale."},{titre:"Laver le sol à genoux / quatre pattes – Cross-body",cat:"Renforcement",duree:20,desc:"À quatre pattes : alterner bras droit + jambe gauche tendus (bird-dog) entre chaque mouvement de lavage. Renforce gainage profond et coordination."},{titre:"Laver le sol à genoux / quatre pattes – Agenouillement contrôlé",cat:"Renforcement",duree:15,desc:"Descendre en fente contrôlée (4 temps), poser genou doucement, remonter en poussant sur le talon. Renforce quadriceps, contrôle excentrique."},{titre:"Nettoyer les plinthes – Squat maintenu",cat:"Renforcement",duree:10,desc:"Travailler en position squat isométrique (cuisses parallèles au sol) pour nettoyer les plinthes. Renforce quadriceps et stabilité du genou."},{titre:"Étendre le linge – Élévation scapulaire",cat:"Ergo-ménager",duree:15,desc:"Pour chaque pièce suspendue : élever les bras en gardant omoplates basses et rapprochées. Pas de compensation cervicale. Renforce dentelé, trapèzes."},{titre:"Étendre le linge – Relevés de genoux",cat:"Ergo-ménager",duree:15,desc:"Entre chaque pièce : 5 relevés de genoux alternés (marche sur place haute). Renforce psoas, core, coordination cardio légère."},{titre:"Plier le linge – Squat maintenu",cat:"Ergo-ménager",duree:15,desc:"Plier chaque pièce en position squat isométrique (cuisses à 90°). Descendre, plier, remonter. Renforce quadriceps, fessiers, endurance jambes."},{titre:"Trier le linge – Hinge répété",cat:"Ergo-ménager",duree:10,desc:"Pour ramasser chaque pièce au sol : hinge strict dos neutre, poussée par talons. Répété 15-20 fois = série de Romanian Deadlift fonctionnel."},{titre:"Repasser – Station debout active",cat:"Renforcement",duree:30,desc:"Transfert de poids jambe à jambe toutes les 30s. Relevés de talons toutes les 3 min. Gainage actif en repassant. Mobilité cheville et endurance posturale."},{titre:"Repasser – Fentes sur place",cat:"Renforcement",duree:30,desc:"En repassant de grandes pièces (draps, nappes) : avancer en fente à chaque passage. Renforce quadriceps, fessiers, travail cardiovasculaire léger."},{titre:"Ranger le linge dans les armoires – Squat + élévation",cat:"Ergo-ménager",duree:10,desc:"Prendre une pile du bas en squat, ranger en haut = élévation bras contrôlée (épaules stables). Enchaîner 10 fois. Circuit fonctionnel complet."},{titre:"Dépoussiérer les meubles – Mobilisation épaules",cat:"Mobilité",duree:15,desc:"Mouvements circulaires larges avec le chiffon : activer toute l'amplitude de l'épaule, omoplate basse. Renforce coiffe des rotateurs et mobilité thoracique."},{titre:"Nettoyer les vitres / miroirs – Élévation bras tendu",cat:"Renforcement",duree:15,desc:"Grands cercles et mouvements en 8 avec le bras tendu. Gainage actif pendant les mouvements hauts. Renforce épaule, triceps, core."},{titre:"Nettoyer les surfaces hautes – Pointes de pieds",cat:"Renforcement",duree:10,desc:"Pour atteindre en hauteur : monter sur pointes de pieds lentement (3 temps), tenir 2s, redescendre (3 temps). 10 fois = renforcement mollets, équilibre."},{titre:"Ranger les placards bas – Squat profond répété",cat:"Renforcement",duree:15,desc:"Chaque objet rangé en bas = squat profond. Chaque retrait = squat + hinge selon la position. 15-20 répétitions spontanées = séance jambes."},{titre:"Ranger les placards hauts – Stabilité épaule",cat:"Renforcement",duree:15,desc:"Porter les objets au-dessus de la tête : coude légèrement fléchi, omoplate engagée vers le bas. Renforce stabilisateurs d'épaule, triceps, gainage."},{titre:"Déplacer des meubles légers – Poussée engagée",cat:"Renforcement",duree:10,desc:"Pousser un meuble : pieds ancrés, genoux fléchis, poussée depuis les jambes (pas le dos). Gainage maximal. Renforce tout le corps en chaîne."},{titre:"Faire les lits – Fentes autour du lit",cat:"Renforcement",duree:10,desc:"Se déplacer autour du lit en fentes : pas en avant ou latéraux selon le côté à border. 3 tours du lit = 15-20 fentes. Renforce jambes, équilibre."},{titre:"Changer les draps – Squat + rotation",cat:"Mobilité",duree:10,desc:"Border les coins en squat profond. Saisir et tirer les draps en rotation thoracique contrôlée (pas lombaire). Renforce core en rotation, jambes."},{titre:"Nettoyer la baignoire / douche – Fente basse",cat:"Renforcement",duree:10,desc:"Nettoyer le fond en fente profonde ou à genou : descendre en contrôle, frotter en gainage, remonter en poussant sur le talon. Renforce jambes, stabilité."},{titre:"Nettoyer les toilettes – Squat tenu",cat:"Renforcement",duree:5,desc:"Rester en squat isométrique pendant le nettoyage du bas des toilettes. Dos droit, abdos engagés. Renforce quadriceps, endurance posturale."},{titre:"Nettoyer le lavabo – Stabilité debout penchée",cat:"Renforcement",duree:5,desc:"Se pencher en hinge (dos droit) vers le lavabo bas. Jambes légèrement fléchies, abdos engagés. Renforce ischios, lombes, endurance de gainage."},{titre:"Jardinage – Désherbage en squat",cat:"Renforcement",duree:30,desc:"Désherber accroupi en squat profond (talons au sol si possible) plutôt qu'à genoux courbé. Alterner squat et demi-genou. Renforce jambes, chaîne postérieure."},{titre:"Jardinage – Bêchage / ratissage",cat:"Renforcement",duree:30,desc:"Bêcher : pousser avec le pied, tirer avec les bras et hanche (pas le dos). Rotation du buste contrôlée. Renforce tout le corps, mobilité thoracique."},{titre:"Jardinage – Port de terreau / arrosage",cat:"Renforcement",duree:20,desc:"Porter l'arrosoir ou le sac de terreau en farmer's walk. Remplir/vider en hinge. Renforce avant-bras, trapèzes, chaîne postérieure."},{titre:"Montée et descente des escaliers – Step-up renforcé",cat:"Renforcement",duree:10,desc:"Monter en posant le pied entier (pas juste la pointe), pousser sur le talon, dos droit. Descendre lentement (excentrique). Renforce quadriceps, fessiers, mollets."},{titre:"Monter des charges (caves, greniers) – Circuit complet",cat:"Renforcement",duree:15,desc:"Porter une caisse : hinge pour soulever, gainage maximal en montant les escaliers, poser en squat. Renforce tout le corps en condition fonctionnelle."},{titre:"Nettoyage de la voiture – Mobilisation complète",cat:"Mobilité",duree:20,desc:"Alterner : se pencher (hinge) pour le bas, élévation bras pour le toit, rotation tronc pour les côtés. Gainage actif tout le long. Mobilité complète."},{titre:"Trier / vider des cartons – Hinge + portage",cat:"Renforcement",duree:20,desc:"Chaque carton = hinge pour soulever, farmer's walk pour déplacer, squat pour poser. Répéter consciemment. Renforce dos, jambes, core fonctionnel."}];
+function openExoLib(c, isSelf){
+  clear(); topbar("Exercices ergo", c.nom, function(){ openClient(c.id,isSelf); });
+  var coach=isCoach();
+  app.appendChild(el("div","muted","Bibliothèque d'exercices ergoptimistes — à intégrer dans le quotidien."));
+  var sp0=el("div"); sp0.style.height="10px"; app.appendChild(sp0);
+  var cats=["Tous"].concat(EXO_CATS), active="Tous", q="";
+  var search=input("",{placeholder:"🔍 Rechercher un exercice…"}); search.style.marginBottom="10px"; app.appendChild(search);
+  var chips=el("div"); chips.style.cssText="display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px"; app.appendChild(chips);
+  var listWrap=el("div"); app.appendChild(listWrap);
+  function chip(label){ var b=el("button"); b.textContent=label; var on=label===active; b.style.cssText="font-size:12px;padding:6px 11px;border-radius:20px;cursor:pointer;font-family:inherit;border:1px solid "+(on?"var(--gold)":"var(--border)")+";background:"+(on?"rgba(201,168,76,.15)":"var(--surf)")+";color:"+(on?"var(--gold)":"var(--dim)"); b.onclick=function(){ active=label; render(); }; return b; }
+  function render(){
+    chips.innerHTML=""; cats.forEach(function(ct){ chips.appendChild(chip(ct)); });
+    listWrap.innerHTML="";
+    var items=EXERCISES.filter(function(e){ var okc=active==="Tous"||e.cat===active; var okq=!q||(e.titre+" "+e.desc).toLowerCase().indexOf(q)>-1; return okc&&okq; });
+    var count=el("div","muted"); count.style.cssText="font-size:11px;margin-bottom:8px"; count.textContent=items.length+" exercice"+(items.length>1?"s":""); listWrap.appendChild(count);
+    if(!items.length){ listWrap.appendChild(el("div","card center muted","Aucun exercice trouvé.")); return; }
+    items.forEach(function(e){
+      var card=el("div","card");
+      card.innerHTML='<div class="row" style="justify-content:space-between;align-items:center"><div style="font-weight:700;font-size:15px">'+esc(e.titre)+'</div><span class="muted" style="font-size:12px;flex-shrink:0;margin-left:8px">'+e.duree+' min</span></div>'
+        +'<div style="font-size:11px;margin:3px 0 0;color:var(--gold)">'+esc(e.cat)+'</div>'
+        +'<div style="font-size:13px;line-height:1.5;margin-top:6px">'+esc(e.desc)+'</div>';
+      if(coach){ var add=el("button","btn ghost","Ajouter au programme"); add.style.marginTop="10px"; add.onclick=function(){ c.programme=(c.programme||[]).concat([{id:genId(),nom:e.titre,desc:e.desc+" · "+e.duree+" min",_ts:Date.now()}]); add.disabled=true; add.textContent="✓ Ajouté"; saveClient(c).then(function(m){Object.assign(c,m); toast("Ajouté au programme");}); }; card.appendChild(add); }
+      listWrap.appendChild(card);
+    });
+  }
+  search.oninput=function(){ q=(search.value||"").toLowerCase(); render(); };
+  render();
+}
+
+function poCard(c, isSelf){
+  var list=(c.petitsObjectifs||[]).filter(function(o){return !o.del;});
+  if(!list.length){
+    if(!isCoach()) return null;
+    var c0=el("div","card"); c0.appendChild(el("div","eyebrow","🌱 Petits objectifs du jour"));
+    var p=el("div","muted"); p.style.cssText="font-size:13px;margin-top:6px"; p.textContent="Aucun petit objectif défini. Ajoute-les dans Objectifs."; c0.appendChild(p); return c0;
+  }
+  c.poValid=c.poValid||[]; var key=today();
+  function doneToday(id){ return c.poValid.indexOf(key+":"+id)>-1; }
+  var card=el("div","card");
+  card.appendChild(el("div","eyebrow","🌱 Mes petits objectifs du jour"));
+  var remain=el("div","muted"); remain.style.cssText="font-size:12px;margin:6px 0 4px"; card.appendChild(remain);
+  function refreshRemain(){ var left=list.filter(function(o){return !doneToday(o.id);}).length; remain.textContent = left===0 ? "Tous validés aujourd'hui — bravo ! 🔥" : ("Il te reste "+left+" objectif"+(left>1?"s":"")+" — on garde la série 🔥"); }
+  list.forEach(function(o){
+    var row=el("div"); row.style.cssText="display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--border);cursor:pointer";
+    var box=el("div"); box.style.cssText="width:24px;height:24px;border-radius:8px;border:1.5px solid var(--ok);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0";
+    var txt=el("div"); txt.style.cssText="font-size:14px;flex:1"; txt.textContent=o.texte;
+    function paint(){ var d=doneToday(o.id); box.textContent=d?"✓":""; box.style.background=d?"var(--ok)":"transparent"; box.style.color=d?"#0F2820":"var(--ok)"; txt.style.color=d?"var(--dim)":"var(--text)"; txt.style.textDecoration=d?"line-through":"none"; }
+    paint();
+    row.appendChild(box); row.appendChild(txt);
+    row.onclick=function(){ var k=key+":"+o.id; var i=c.poValid.indexOf(k); if(i>-1) c.poValid.splice(i,1); else c.poValid.push(k); paint(); refreshRemain(); saveClient(c).then(function(m){Object.assign(c,m);}); };
+    card.appendChild(row);
+  });
+  refreshRemain();
+  return card;
+}
+
+/* ===================== Nutrition : recherche API + Nutri-Score + IA photo ===================== */
+function nutriScoreBadge(g){ g=(g||"").toUpperCase(); var C={A:"#038141",B:"#85BB2F",C:"#FECB02",D:"#EE8100",E:"#E63E11"}; if(!C[g]) return ""; return '<span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;background:'+C[g]+';color:#fff;font-weight:800;font-size:13px">'+g+'</span>'; }
+
+function offSearch(q){
+  var url="https://world.openfoodfacts.org/cgi/search.pl?search_terms="+encodeURIComponent(q)+"&search_simple=1&action=process&json=1&page_size=20&fields=code,product_name,product_name_fr,brands,image_front_small_url,nutriments,nutriscore_grade,nova_group,quantity";
+  return fetch(url).then(function(r){return r.json();}).then(function(d){
+    var arr=(d&&d.products)||[];
+    return arr.map(function(p){ var n=p.nutriments||{}; var kcal=n["energy-kcal_100g"]; if(kcal==null&&n["energy_100g"]!=null) kcal=n["energy_100g"]/4.184; var nom=((p.product_name_fr||p.product_name||"").trim()); if(!nom) return null;
+      return { code:p.code, nom:nom, brand:((p.brands||"").split(",")[0]||"").trim(), image:p.image_front_small_url||"", kcal:Math.round(kcal||0), p:+(n.proteins_100g||0), g:+(n.carbohydrates_100g||0), l:+(n.fat_100g||0), nutriscore:(p.nutriscore_grade||"").toUpperCase(), nova:p.nova_group||null, quantity:(p.quantity||"").trim() };
+    }).filter(function(x){ return x && x.kcal>0; });
+  });
+}
+
+function renderProductScreen(prod, backFn, onPickFood){ clear(); topbar(prod.nom||"Produit","Open Food Facts", backFn); var host=el("div"); app.appendChild(host); renderProduct(prod, host, onPickFood, backFn); }
+
+function openOFFSearch(q0, backFn, onPickFood){
+  clear(); topbar("Recherche en ligne","Open Food Facts · Nutri-Score", backFn);
+  var bar=el("div","row"); bar.style.marginBottom="10px";
+  var s=input(q0||"",{placeholder:"Nom du produit…"}); s.style.flex="1"; s.style.minWidth="0";
+  var go=el("button","btn primary","Chercher"); bar.appendChild(s); bar.appendChild(go); app.appendChild(bar);
+  var status=el("div","muted"); status.style.cssText="font-size:12px;margin-bottom:10px"; app.appendChild(status);
+  var wrap=el("div"); app.appendChild(wrap);
+  function run(){ var q=(s.value||"").trim(); if(q.length<2){status.textContent="Tape au moins 2 lettres.";return;} status.textContent="Recherche en ligne…"; wrap.innerHTML="";
+    offSearch(q).then(function(list){ if(!list.length){status.textContent="Aucun résultat. Essaie d'autres mots, ou crée l'aliment à la main.";return;} status.textContent=list.length+" résultats";
+      list.forEach(function(prod){ var card=el("div","card"); card.style.cursor="pointer"; var nb=nutriScoreBadge(prod.nutriscore);
+        card.innerHTML='<div class="row" style="justify-content:space-between;align-items:center"><div style="flex:1;min-width:0"><div style="font-weight:700;font-size:14px">'+esc(prod.nom)+'</div>'+(prod.brand?'<div class="muted" style="font-size:11px">'+esc(prod.brand)+'</div>':'')+'<div class="muted" style="font-size:12px;margin-top:3px">'+prod.kcal+' kcal · P'+fr1(prod.p)+' G'+fr1(prod.g)+' L'+fr1(prod.l)+' /100g</div></div>'+(nb?'<div style="margin-left:10px;flex-shrink:0">'+nb+'</div>':'')+'</div>';
+        card.onclick=function(){ renderProductScreen(prod, function(){ openOFFSearch(q, backFn, onPickFood); }, onPickFood); }; wrap.appendChild(card); });
+    }).catch(function(){ status.textContent="Connexion requise pour la recherche en ligne."; }); }
+  go.onclick=run; s.addEventListener("keydown",function(e){ if(e.key==="Enter") run(); }); if(q0&&q0.length>=2) run();
+}
+
+function aiKey(){ try{ return localStorage.getItem("v2_ai_key")||""; }catch(e){ return ""; } }
+function openFoodAI(c, isSelf){
+  clear(); topbar("Reconnaissance IA","Photo de repas", function(){ openFoodJournal(c,isSelf); });
+  if(!aiKey()){
+    var k=el("div","card"); k.appendChild(el("div","eyebrow","Activer la reconnaissance IA"));
+    var info=el("div","muted"); info.style.cssText="font-size:13px;line-height:1.55;margin:8px 0 10px"; info.textContent="Colle ta clé API Anthropic (commence par sk-ant-). Elle est stockée uniquement sur cet appareil et sert à analyser tes photos de repas. À usage personnel.";
+    k.appendChild(info);
+    var ki=input("",{placeholder:"sk-ant-…"}); var kb=el("button","btn primary block","Enregistrer la clé"); kb.style.marginTop="4px";
+    k.appendChild(field("Clé API Anthropic", ki)); k.appendChild(kb); app.appendChild(k);
+    kb.onclick=function(){ var v=(ki.value||"").trim(); if(v.indexOf("sk-ant")!==0){ toast("Clé invalide (sk-ant-…)."); return; } try{ localStorage.setItem("v2_ai_key",v); }catch(e){} toast("Clé enregistrée"); openFoodAI(c,isSelf); };
+    return;
+  }
+  app.appendChild(el("div","muted","Prends ou choisis une photo de ton repas : l'IA identifie les aliments et estime calories et macros. Tu valides ensuite ce que tu ajoutes."));
+  var fileIn=document.createElement("input"); fileIn.type="file"; fileIn.accept="image/*"; fileIn.style.display="none"; app.appendChild(fileIn);
+  var pick=el("button","btn primary block","📸 Choisir une photo de repas"); pick.style.margin="12px 0"; app.appendChild(pick);
+  var status=el("div","muted"); status.style.cssText="font-size:13px;margin-bottom:10px"; app.appendChild(status);
+  var prev=document.createElement("img"); prev.style.cssText="width:100%;max-height:220px;object-fit:contain;border-radius:12px;border:1px solid var(--border);display:none;margin-bottom:12px"; app.appendChild(prev);
+  var out=el("div"); app.appendChild(out);
+  var resetK=el("button","btn ghost block","Changer / supprimer la clé IA"); resetK.style.marginTop="22px"; resetK.onclick=function(){ try{ localStorage.removeItem("v2_ai_key"); }catch(e){} toast("Clé supprimée"); openFoodAI(c,isSelf); }; app.appendChild(resetK);
+  pick.onclick=function(){ fileIn.click(); };
+  fileIn.onchange=function(){ var f=this.files[0]; if(!f) return; var rd=new FileReader(); rd.onload=function(){ prev.src=rd.result; prev.style.display="block"; var b64=(""+rd.result).split(",")[1]; var mt=(f.type&&f.type.indexOf("image/")===0)?f.type:"image/jpeg"; analyze(b64,mt); }; rd.readAsDataURL(f); };
+  function analyze(b64,mt){
+    status.textContent="Analyse de la photo par l'IA…"; out.innerHTML="";
+    var prompt="Identifie les aliments visibles dans cette photo de repas. Reponds UNIQUEMENT en JSON, sans texte autour, au format: {\"items\":[{\"nom\":\"...\",\"grammes\":120,\"kcal\":210,\"prot\":8,\"gluc\":30,\"lip\":6}]}. Estime des portions realistes ; kcal et macros pour la portion indiquee (pas pour 100 g).";
+    var body={ model:"claude-sonnet-4-6", max_tokens:1024, messages:[{ role:"user", content:[ {type:"image",source:{type:"base64",media_type:mt,data:b64}}, {type:"text",text:prompt} ] }] };
+    fetch("https://api.anthropic.com/v1/messages",{ method:"POST", headers:{ "content-type":"application/json", "x-api-key":aiKey(), "anthropic-version":"2023-06-01", "anthropic-dangerous-direct-browser-access":"true" }, body:JSON.stringify(body) })
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if(d&&d.error){ status.innerHTML='<span style="color:var(--orange)">Erreur IA : '+esc(d.error.message||"vérifie la clé")+'</span>'; return; }
+        var txt=((d.content||[]).map(function(x){ return x.type==="text"?x.text:""; }).join("")).trim();
+        var mm=txt.match(/\{[\s\S]*\}/); var data=null; try{ data=JSON.parse(mm?mm[0]:txt); }catch(e){}
+        if(!data||!data.items||!data.items.length){ status.textContent="Aucun aliment identifié. Réessaie avec une photo plus nette."; return; }
+        status.textContent="✓ "+data.items.length+" aliment(s) identifié(s) — ajoute ce que tu veux :";
+        data.items.forEach(function(it){
+          var card=el("div","card");
+          card.innerHTML='<div style="font-weight:700">'+esc(it.nom||"Aliment")+'</div><div class="muted" style="font-size:13px;margin-top:4px">≈ '+(it.grammes||0)+' g · '+(it.kcal||0)+' kcal · P'+fr1(it.prot||0)+' G'+fr1(it.gluc||0)+' L'+fr1(it.lip||0)+'</div>';
+          var sel=el("select","inp"); sel.style.marginTop="10px"; MEALS.forEach(function(meal){ var o=document.createElement("option"); o.value=meal; o.textContent=meal; sel.appendChild(o); }); card.appendChild(sel);
+          var ab=el("button","btn primary block","Ajouter au journal"); ab.style.marginTop="8px"; card.appendChild(ab);
+          ab.onclick=function(){ var e={id:genId(),date:today(),meal:sel.value,nom:it.nom||"Aliment",qty:it.grammes||0,unit:"g",kcal:Math.round(it.kcal||0),p:fr1(it.prot||0),g:fr1(it.gluc||0),l:fr1(it.lip||0),_ts:Date.now()}; c.journal=(c.journal||[]).concat([e]); ab.disabled=true; ab.textContent="✓ Ajouté"; saveClient(c).then(function(m){ Object.assign(c,m); }); };
+          out.appendChild(card);
+        });
+      })
+      .catch(function(){ status.innerHTML='<span style="color:var(--orange)">Connexion impossible à l\'IA. Vérifie ta clé et ta connexion.</span>'; });
+  }
 }
 
 /* ---------- démarrage ---------- */
