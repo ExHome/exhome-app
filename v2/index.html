@@ -135,7 +135,7 @@ var syncT;
 function setSync(msg){ var e=document.getElementById("sync"); if(!e) return; e.textContent=msg; e.style.display="block";
   clearTimeout(syncT); syncT=setTimeout(function(){ e.style.display="none"; }, 2600); }
 
-var APP_VERSION = "build 15 · 30 juin";
+var APP_VERSION = "build 18 · 30 juin";
 
 /* ---------- localStorage ---------- */
 function readLS(k){ try{ return JSON.parse(localStorage.getItem(k)); }catch(e){ return null; } }
@@ -204,6 +204,7 @@ function phraseCard(){
   var dt=el("div","muted"); dt.style.cssText="margin-top:13px;font-size:12px"; dt.textContent=frDate(); card.appendChild(dt);
   return card;
 }
+ICONS.breath='<circle cx="12" cy="12" r="8.5"/><path d="M5 12c2-3.4 4.5 3.4 7 0s4.5-3.4 7 0" stroke="url(#exhOrange)"/>';
 function iconSvg(key){ return '<svg viewBox="0 0 24 24">'+(ICONS[key]||"")+'</svg>'; }
 
 /* ============================================================================
@@ -316,8 +317,8 @@ function setSession(s){ session=s; writeLS("exhome_v2_session", s); }
 function logout(){ session=null; localStorage.removeItem("exhome_v2_session"); render(); }
 
 var app = document.getElementById("app");
-var __stopCam=null;
-function clear(){ if(__stopCam){ try{__stopCam();}catch(e){} __stopCam=null; } app.innerHTML=""; }
+var __stopCam=null, __stopTimers=null;
+function clear(){ if(__stopCam){ try{__stopCam();}catch(e){} __stopCam=null; } if(__stopTimers){ try{__stopTimers();}catch(e){} __stopTimers=null; } app.innerHTML=""; }
 function toast(msg){ var t=document.createElement("div"); t.className="toast"; t.textContent=msg; document.body.appendChild(t);
   setTimeout(function(){ t.style.opacity="0"; t.style.transition="opacity .4s"; setTimeout(function(){ t.remove(); }, 400); }, 1700); }
 
@@ -348,7 +349,8 @@ function screenLogin(){
   clear();
   var head=el("div","center"); head.style.margin="30px 0 22px";
   head.innerHTML='<div style="font-size:42px;font-weight:800;letter-spacing:.18em;color:var(--gold);line-height:1;text-shadow:0 2px 16px rgba(201,168,76,.28)">EX&nbsp;HOME</div>'
-    +'<div style="margin-top:11px;font-size:12px;letter-spacing:.22em;color:var(--dim);text-transform:uppercase">Ergo · Optimisation · Mouvement</div>';
+    +'<div style="margin-top:11px;font-size:12px;letter-spacing:.22em;color:var(--dim);text-transform:uppercase">Ergo · Optimisation · Mouvement</div>'
+    +'<div style="margin-top:13px;font-size:14px;font-style:italic;color:var(--gold)">« '+TAGLINE+' »</div>';
   app.appendChild(head);
 
   var card=el("div","card");
@@ -490,6 +492,7 @@ function openClient(id, isSelf){
     appIcon("timer","Compteur ergo", function(){ screenCompteur(c, isSelf); });
     appIcon("drop","Hydratation", function(){ screenHydra(c, isSelf); });
     appIcon("heart","Santé", function(){ screenSante(c, isSelf); });
+    appIcon("breath","Respiration", function(){ openRespiration(function(){ openClient(c.id,isSelf); }); });
     appIcon("chart","Mesures", function(){ screenMesures(c, isSelf); });
     appIcon("target","Objectifs", function(){ screenObjectifs(c, isSelf); });
     appIcon("food","Nutrition", function(){ openFoodJournal(c, isSelf); });
@@ -500,7 +503,7 @@ function openClient(id, isSelf){
     appIcon("chat","Messages", function(){ openMessages(c, isSelf); });
     appIcon("posture","Coach posture", function(){ openPosture(c, isSelf); });
     appIcon("camera","Scan balance", function(){ openScan(c, isSelf); });
-    appIcon("search","Audit départ", function(){ openAudit(c, isSelf); });
+    appIcon("search","Audit découverte", function(){ openAudit(c, isSelf); });
     appIcon("user","Profil", function(){ screenProfil(c, isSelf); });
     app.appendChild(grid);
     var foot=el("div","center muted"); foot.style.cssText="margin-top:30px;font-size:11px;letter-spacing:.04em"; foot.textContent="Ex Home v2 · "+APP_VERSION; app.appendChild(foot);
@@ -1620,45 +1623,68 @@ function openScan(c, isSelf){
   save.onclick=function(){ var any=false; var m={id:genId(),date:dateIn.value||today(),source:"balance",_ts:Date.now()}; SCALE_FIELDS.forEach(function(f){ var v=num(inputs[f.k].value); if(v!=null){m[f.k]=v; any=true;} }); if(!any){toast("Renseigne au moins une valeur.");return;} c.mesures=(c.mesures||[]).concat([m]); save.disabled=true; save.textContent="Enregistrement…"; saveClient(c).then(function(mc){Object.assign(c,mc); toast("Mesure enregistrée"); openClient(c.id,isSelf);}); };
 }
 
-/* ===================== Audit de départ (découverte) ===================== */
+/* ===================== Audit découverte (ergo + nutrition) ===================== */
 function openAudit(c, isSelf){
-  clear(); topbar("Audit de départ", c.nom, function(){ openClient(c.id,isSelf); });
+  clear(); topbar("Audit découverte", c.nom, function(){ openClient(c.id,isSelf); });
   var coach=isCoach(); c.audit=c.audit||{};
-  app.appendChild(el("div","muted", coach? "Bilan initial de découverte — ergoptimisation & nutrition." : "Ton bilan de départ, défini avec ton coach."));
+  app.appendChild(el("div","muted", coach? "Audit découverte — ergoptimisation & nutrition. Le bilan nutritionnel nourrit cet audit." : "Ton audit découverte, défini avec ton coach."));
   var fields={};
-  function sec(title){ var card=el("div","card"); card.appendChild(el("div","eyebrow",title)); var sp=el("div"); sp.style.height="10px"; card.appendChild(sp); app.appendChild(card); return card; }
+  function sec(t){ var card=el("div","card"); card.appendChild(el("div","eyebrow",t)); var sp=el("div"); sp.style.height="10px"; card.appendChild(sp); app.appendChild(card); return card; }
   function add(card,key,label,ph,multi){ var i= multi? textarea(c.audit[key],ph) : input(c.audit[key],{placeholder:ph||""}); if(!coach){ i.disabled=true; i.style.opacity=".85"; } fields[key]=i; card.appendChild(field(label,i)); }
-  var s1=sec("1 · Identité & contexte");
+
+  var s1=sec("1 · Identité du client");
   add(s1,"profession","Profession / activité","Ex : Infirmière, Commerciale…");
-  add(s1,"situationPro","Situation professionnelle","Active / sans activité…");
-  add(s1,"contexte","Contexte de vie","Seul·e, en couple, enfants…");
+  add(s1,"situationFamiliale","Situation familiale","Seul·e, en couple, enfants…");
+  add(s1,"contexte","Contexte de vie","Domicile, rythme, contraintes…");
   add(s1,"aide","Aide à domicile","Femme de ménage, aide…");
+
   var s2=sec("2 · Objectifs & motivations");
-  add(s2,"ameliorer","Ce que la personne souhaite améliorer",null,true);
+  add(s2,"objPrincipal","Objectif principal","");
+  add(s2,"objMots","Objectif formulé par la personne (ses mots)",null,true);
+  add(s2,"obj1mois","Objectif 1 mois","");
+  add(s2,"obj3mois","Objectif 3 mois","");
+  add(s2,"obj6mois","Objectif 6 mois","");
   add(s2,"ressenti","Ressenti souhaité","");
-  add(s2,"premierResultat","Premier résultat attendu","");
-  add(s2,"echeance","Échéance / événement","Ex : mariage en juin…");
+  add(s2,"echeance","Échéance / motivation immédiate","Ex : mariage en juin…");
   add(s2,"freins","Freins / obstacles","Ex : manque de temps…",true);
+
   var s3=sec("3 · Antécédents & pathologies");
-  add(s3,"antecedents","Suivi médical","Médicaments, kiné, ostéo…",true);
+  add(s3,"antecedents","Suivi médical / antécédents","Médicaments, kiné, ostéo…",true);
   add(s3,"limitations","Limitations / précautions","Ex : Lombaires fragiles, éviter flexions…",true);
+
   var s4=sec("4 · Sédentarité & activité physique");
-  add(s4,"sedentarite","Niveau de sédentarité / activité","");
+  add(s4,"sedentarite","Niveau de sédentarité global","");
+  add(s4,"activiteActuelle","Activité physique actuelle","");
   add(s4,"activiteObs","Observations",null,true);
-  var s5=sec("5 · Habitudes & tâches ménagères");
-  add(s5,"taches","Tâches du quotidien","Repassage, préparation des repas, courses, ménage…",true);
+
+  var s5=sec("5 · Habitudes & tâches ménagères — inventaire ergo");
+  add(s5,"taches","Tâches du quotidien","Ex : Repasser le linge en gainage…",true);
   add(s5,"obsModeVie","Observations sur le mode de vie",null,true);
-  var s7=sec("6 · Bilan postural & ergoptimiste");
-  add(s7,"obsPosture","Observations posturales",null,true);
+
+  var s6=sec("6 · Mesures corporelles");
+  var note=el("div","muted"); note.style.cssText="font-size:13px;line-height:1.5"; note.textContent="Les mesures (poids, masse grasse, muscle, eau…) se saisissent dans Mesures / Scan balance et alimentent automatiquement le tableau de bord.";
+  s6.appendChild(note);
+  var goM=el("button","btn ghost","Ouvrir les mesures"); goM.style.marginTop="10px"; goM.onclick=function(){ screenMesures(c,isSelf); }; s6.appendChild(goM);
+
+  var s7=sec("7 · Bilan postural & observations ergoptimiste");
+  add(s7,"posture","Posture & alignement","");
+  add(s7,"obsPosture","Observations posturales détaillées",null,true);
   add(s7,"tensions","Zones de tension, compensations, asymétries",null,true);
+  add(s7,"niveauAttribue","Niveau attribué","");
+  add(s7,"frequence","Fréquence recommandée","");
   add(s7,"priorites","Priorités pour la personne",null,true);
-  add(s7,"recommandations","Recommandations",null,true);
-  var sn=sec("7 · Bilan nutritionnel");
-  add(sn,"nutHabitudes","Habitudes alimentaires","Repas, horaires, équilibre…",true);
-  add(sn,"nutGrignotage","Grignotage / sucre","Ex : pas de sucre dans le café…");
-  add(sn,"nutHydratation","Hydratation","");
-  add(sn,"nutObjectifs","Objectifs nutritionnels",null,true);
-  if(coach){ var save=el("button","btn primary block","Enregistrer l'audit"); app.appendChild(save); save.onclick=function(){ Object.keys(fields).forEach(function(k){ c.audit[k]=fields[k].value; }); c.audit._ts=Date.now(); save.disabled=true; save.textContent="Enregistrement…"; saveClient(c).then(function(m){Object.assign(c,m); toast("Audit enregistré"); openClient(c.id,isSelf);}); }; }
+  add(s7,"recommandations","Recommandations prioritaires",null,true);
+
+  var s8=sec("8 · Bilan nutritionnel");
+  add(s8,"nutHabitudes","Habitudes alimentaires","Repas, horaires, équilibre…",true);
+  add(s8,"nutGrignotage","Grignotage / sucre","Ex : pas de sucre dans le café…");
+  add(s8,"nutHydratation","Hydratation","Eau / jour, boissons…");
+  add(s8,"nutObjectifs","Objectifs nutritionnels",null,true);
+
+  var s9=sec("9 · Consentement");
+  add(s9,"consentement","Consentement & remarques","Accord pour le suivi, les données, les photos…",true);
+
+  if(coach){ var save=el("button","btn primary block","Enregistrer l'audit découverte"); app.appendChild(save); save.onclick=function(){ Object.keys(fields).forEach(function(k){ c.audit[k]=fields[k].value; }); c.audit._ts=Date.now(); save.disabled=true; save.textContent="Enregistrement…"; saveClient(c).then(function(m){Object.assign(c,m); toast("Audit découverte enregistré"); openClient(c.id,isSelf);}); }; }
 }
 
 /* ===================== Présentation Ex Home ===================== */
@@ -1679,21 +1705,44 @@ var SCIENCE=[
 var __about=null;
 function loadAbout(){ if(__about) return Promise.resolve(__about); var local=readLS("v2_about"); return cloudGet("v2:__about").then(function(cloud){ __about=Object.assign({},DEFAULT_ABOUT,local||{},cloud||{}); writeLS("v2_about",__about); return __about; }).catch(function(){ __about=Object.assign({},DEFAULT_ABOUT,local||{}); return __about; }); }
 function saveAbout(a){ __about=a; writeLS("v2_about",a); return cloudPut("v2:__about",a); }
+var TAGLINE="Ancrer le mouvement pour de bon.";
+var NEURO="Le cerveau se reconfigure à chaque geste répété. En transformant les gestes du quotidien en mouvements intentionnels, on crée de nouveaux schémas moteurs durables : le corps apprend, puis retient. Chaque jour bougé renforce l'habitude autant que le muscle.";
+var CYCLE66="En moyenne, il faut environ 66 jours pour qu'un comportement devienne automatique — la patience est scientifique. C'est tout l'esprit d'Ex Home : des gestes simples, répétés un peu chaque jour, jusqu'à ce qu'ils deviennent naturels. La progression par ceintures accompagne ce chemin, jour après jour.";
+var PILIERS=[
+  "Ancre le geste à un repère existant : « après le café, je bouge 5 minutes ».",
+  "Choisis un créneau fixe : l'heure régulière ancre l'habitude.",
+  "Commence ridiculement petit : une habitude minuscule tenue bat une grande abandonnée.",
+  "Empile les habitudes : ajoute le nouveau geste juste après un geste déjà automatique.",
+  "Prépare l'environnement : moins il y a de friction, plus l'habitude tient.",
+  "Ce qui compte, c'est la tendance sur la durée — un jour manqué ne casse rien, reprends sans culpabilité."
+];
 function openPresentation(backFn){
   clear(); topbar("Ex Home","La méthode", backFn);
   var wrap=el("div"); app.appendChild(wrap); wrap.appendChild(el("div","muted center","Chargement…"));
   loadAbout().then(function(a){
     wrap.innerHTML="";
-    var hd=el("div","center"); hd.style.margin="6px 0 16px";
-    hd.innerHTML='<div style="font-size:30px;font-weight:800;letter-spacing:.16em;color:var(--gold)">EX&nbsp;HOME</div><div class="muted" style="margin-top:6px;font-size:12px;letter-spacing:.18em;text-transform:uppercase">Ergo · Optimisation · Mouvement</div>';
+    var hd=el("div","center"); hd.style.margin="6px 0 18px";
+    hd.innerHTML='<div style="font-size:30px;font-weight:800;letter-spacing:.16em;color:var(--gold);text-shadow:0 2px 14px rgba(201,168,76,.25)">EX&nbsp;HOME</div>'
+      +'<div class="muted" style="margin-top:6px;font-size:12px;letter-spacing:.18em;text-transform:uppercase">Ergo · Optimisation · Mouvement</div>'
+      +'<div style="margin-top:14px;font-size:18px;font-weight:700;font-style:italic;color:var(--text);line-height:1.4">« '+TAGLINE+' »</div>';
     wrap.appendChild(hd);
-    function block(title,text){ if(!text) return; var c=el("div","card"); c.appendChild(el("div","eyebrow",title)); var sp=el("div"); sp.style.height="8px"; c.appendChild(sp); var p=el("div"); p.style.cssText="font-size:14px;line-height:1.6;white-space:pre-wrap"; p.textContent=text; c.appendChild(p); wrap.appendChild(c); }
+    function block(title,text){ if(!text) return; var c=el("div","card"); c.appendChild(el("div","eyebrow",title)); var sp=el("div"); sp.style.height="8px"; c.appendChild(sp); var p=el("div"); p.style.cssText="font-size:14px;line-height:1.65;white-space:pre-wrap"; p.textContent=text; c.appendChild(p); wrap.appendChild(c); }
     block("Notre vision", a.intro);
     block("La méthode — l'ergoptimisation", a.methode);
-    var f=el("div","card"); f.appendChild(el("div","eyebrow","Les fondateurs")); var sp=el("div"); sp.style.height="10px"; f.appendChild(sp);
+    block("La neuroplasticité", NEURO);
+    var cy=el("div","card"); cy.style.textAlign="center";
+    var cyTop=el("div","eyebrow"); cyTop.textContent="Le cycle des 66 jours"; cy.appendChild(cyTop);
+    var big=el("div"); big.style.cssText="font-size:54px;font-weight:800;color:var(--gold);line-height:1;margin:10px 0 2px"; big.textContent="66"; cy.appendChild(big);
+    var cySub=el("div","muted"); cySub.style.cssText="font-size:12px;margin-bottom:12px"; cySub.textContent="jours pour ancrer une habitude"; cy.appendChild(cySub);
+    var cyP=el("div"); cyP.style.cssText="font-size:14px;line-height:1.65"; cyP.textContent=CYCLE66; cy.appendChild(cyP);
+    wrap.appendChild(cy);
+    var pil=el("div","card"); pil.appendChild(el("div","eyebrow","Les piliers de l'habitude")); var sp4=el("div"); sp4.style.height="8px"; pil.appendChild(sp4);
+    PILIERS.forEach(function(s){ var l=el("div"); l.style.cssText="display:flex;gap:9px;font-size:13.5px;line-height:1.5;margin-bottom:9px"; l.innerHTML='<span style="color:var(--gold);flex-shrink:0">◆</span><span>'+esc(s)+'</span>'; pil.appendChild(l); });
+    wrap.appendChild(pil);
+    var f=el("div","card"); f.appendChild(el("div","eyebrow","Les fondateurs")); var sp2=el("div"); sp2.style.height="10px"; f.appendChild(sp2);
     [a.aude,a.sylvain].forEach(function(t){ if(!t) return; var p=el("div"); p.style.cssText="font-size:14px;line-height:1.6;white-space:pre-wrap;margin-bottom:10px"; p.textContent=t; f.appendChild(p); });
     wrap.appendChild(f);
-    var sc=el("div","card"); sc.appendChild(el("div","eyebrow","Ce que dit la science")); var sp2=el("div"); sp2.style.height="8px"; sc.appendChild(sp2);
+    var sc=el("div","card"); sc.appendChild(el("div","eyebrow","Ce que dit la science")); var sp3=el("div"); sp3.style.height="8px"; sc.appendChild(sp3);
     SCIENCE.forEach(function(s){ var l=el("div"); l.style.cssText="display:flex;gap:9px;font-size:13.5px;line-height:1.5;margin-bottom:9px"; l.innerHTML='<span style="color:var(--gold);flex-shrink:0">◆</span><span>'+esc(s)+'</span>'; sc.appendChild(l); });
     wrap.appendChild(sc);
     if(isCoach()){ var edit=el("button","btn line block","Modifier la présentation"); edit.onclick=function(){ aboutForm(backFn,a); }; wrap.appendChild(edit); }
@@ -1707,6 +1756,50 @@ function aboutForm(backFn,a){
   app.appendChild(card);
   var save=el("button","btn primary block","Enregistrer"); app.appendChild(save);
   save.onclick=function(){ var n=Object.assign({},a,{intro:intro.value,methode:methode.value,aude:aude.value,sylvain:sylvain.value}); save.disabled=true; save.textContent="Enregistrement…"; saveAbout(n).then(function(){ toast("Présentation enregistrée"); openPresentation(backFn); }); };
+}
+
+/* ===================== Respiration guidée ===================== */
+var BREATH=[
+ {nom:"Cohérence cardiaque", desc:"Inspire 5 s, expire 5 s — 6 respirations par minute. Équilibre le système nerveux, idéal en journée.", phases:[{lab:"Inspire",dur:5},{lab:"Expire",dur:5}], cycles:30},
+ {nom:"Respiration carrée (4·4·4·4)", desc:"Inspire 4 s, retiens 4 s, expire 4 s, retiens 4 s. Idéale avant un moment stressant.", phases:[{lab:"Inspire",dur:4},{lab:"Retiens",dur:4},{lab:"Expire",dur:4},{lab:"Retiens",dur:4}], cycles:6},
+ {nom:"4-7-8 (sommeil)", desc:"Inspire 4 s, retiens 7 s, expire lentement 8 s. Puissante pour s'endormir.", phases:[{lab:"Inspire",dur:4},{lab:"Retiens",dur:7},{lab:"Expire",dur:8}], cycles:4},
+ {nom:"Respiration abdominale", desc:"Gonfle le ventre à l'inspiration, dégonfle à l'expiration. Détente profonde.", phases:[{lab:"Inspire",dur:4},{lab:"Expire",dur:6}], cycles:10}
+];
+function openRespiration(backFn){
+  clear(); topbar("Respiration","Cohérence & détente", backFn);
+  app.appendChild(el("div","muted","Quelques minutes de respiration guidée pour récupérer, apaiser le stress ou préparer le sommeil. Suis le cercle : il gonfle à l'inspiration, se réduit à l'expiration."));
+  var sp=el("div"); sp.style.height="12px"; app.appendChild(sp);
+  BREATH.forEach(function(ex){
+    var card=el("div","card");
+    card.innerHTML='<div style="font-weight:700;font-size:15px">'+esc(ex.nom)+'</div><div class="muted" style="font-size:13px;line-height:1.5;margin:6px 0 12px">'+esc(ex.desc)+'</div>';
+    var b=el("button","btn primary block","Démarrer"); b.onclick=function(){ startBreathing(ex, backFn); }; card.appendChild(b);
+    app.appendChild(card);
+  });
+}
+function startBreathing(ex, backFn){
+  clear(); topbar(ex.nom,"Respiration", function(){ openRespiration(backFn); });
+  var running={on:true}; __stopTimers=function(){ running.on=false; };
+  var stage=el("div","center"); stage.style.cssText="padding:26px 0";
+  var circle=el("div"); circle.style.cssText="width:180px;height:180px;border-radius:50%;margin:0 auto;background:radial-gradient(circle at 50% 35%, #1C4231, #0E2419);border:2px solid var(--gold);box-shadow:0 0 30px rgba(201,168,76,.25);display:flex;align-items:center;justify-content:center;transform:scale(0.55);transition:transform linear 0s";
+  var inner=el("div"); inner.style.textAlign="center";
+  var phaseEl=el("div"); phaseEl.style.cssText="font-size:21px;font-weight:800;color:var(--gold)";
+  var countEl=el("div"); countEl.style.cssText="font-size:15px;color:var(--text);margin-top:4px";
+  inner.appendChild(phaseEl); inner.appendChild(countEl); circle.appendChild(inner); stage.appendChild(circle);
+  var cycleEl=el("div","muted"); cycleEl.style.cssText="margin-top:24px;font-size:13px"; stage.appendChild(cycleEl);
+  app.appendChild(stage);
+  var stop=el("button","btn ghost block","Terminer"); stop.onclick=function(){ running.on=false; openRespiration(backFn); }; app.appendChild(stop);
+  var cycle=0, pi=0;
+  function runPhase(){
+    if(!running.on) return;
+    var ph=ex.phases[pi];
+    phaseEl.textContent=ph.lab;
+    var target= ph.lab==="Inspire" ? 1 : (ph.lab==="Expire" ? 0.55 : null);
+    if(target!=null){ circle.style.transitionDuration=ph.dur+"s"; circle.style.transform="scale("+target+")"; }
+    var remain=ph.dur; countEl.textContent=remain; cycleEl.textContent="Cycle "+(cycle+1)+" / "+ex.cycles;
+    var iv=setInterval(function(){ if(!running.on){clearInterval(iv);return;} remain--; if(remain<=0){clearInterval(iv);} else {countEl.textContent=remain;} },1000);
+    setTimeout(function(){ if(!running.on) return; pi++; if(pi>=ex.phases.length){ pi=0; cycle++; if(cycle>=ex.cycles){ running.on=false; phaseEl.textContent="Bravo 🌿"; countEl.textContent=""; circle.style.transitionDuration="1.2s"; circle.style.transform="scale(0.7)"; cycleEl.textContent="Séance terminée"; return; } } runPhase(); }, ph.dur*1000);
+  }
+  runPhase();
 }
 
 /* ---------- démarrage ---------- */
