@@ -135,7 +135,7 @@ var syncT;
 function setSync(msg){ var e=document.getElementById("sync"); if(!e) return; e.textContent=msg; e.style.display="block";
   clearTimeout(syncT); syncT=setTimeout(function(){ e.style.display="none"; }, 2600); }
 
-var APP_VERSION = "build 35 · 30 juin";
+var APP_VERSION = "build 41 · 30 juin";
 
 /* ---------- localStorage ---------- */
 function readLS(k){ try{ return JSON.parse(localStorage.getItem(k)); }catch(e){ return null; } }
@@ -206,6 +206,7 @@ function phraseCard(){
 }
 ICONS.breath='<circle cx="12" cy="12" r="8.5"/><path d="M5 12c2-3.4 4.5 3.4 7 0s4.5-3.4 7 0" stroke="url(#exhOrange)"/>';
 ICONS.exo='<path d="M6.5 9.5 L6.5 14.5 M17.5 9.5 L17.5 14.5"/><path d="M4 10.5 L4 13.5 M20 10.5 L20 13.5"/><path d="M6.5 12 L17.5 12" stroke="url(#exhOrange)"/>';
+ICONS.chrono='<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.6 2.2" stroke="url(#exhOrange)"/><path d="M9.5 2.5h5"/><path d="M12 2.5v2.5"/>';
 function iconSvg(key){ return '<svg viewBox="0 0 24 24">'+(ICONS[key]||"")+'</svg>'; }
 
 /* ============================================================================
@@ -215,7 +216,7 @@ function emptyClient(nom){
   return { id:genId(), nom:nom||"", login:slugLogin(nom||"cliente"), pin:"1234", photo:null,
     profil:{ age:"", taille:"", sexe:"", niveau:"" },
     objectifText:"", dateDebut:today(),
-    joursReussis:[], objectifs:[], mesures:[], sante:[], journal:[], programme:[], seances:[], messages:[], petitsObjectifs:[], poValid:[], audit:{}, ergo:{}, ergoSquat:{}, ergoFente:{}, ergoHinge:{}, ergoEtages:{}, hydra:{}, cibles:{ basale:null },
+    joursReussis:[], objectifs:[], mesures:[], sante:[], journal:[], programme:[], seances:[], messages:[], petitsObjectifs:[], poValid:[], audit:{}, chrono:{sessions:[]}, ergo:{}, ergoSquat:{}, ergoFente:{}, ergoHinge:{}, ergoEtages:{}, hydra:{}, cibles:{ basale:null },
     _mtime:0 };
 }
 function maxMerge(a,b){ a=a||{}; b=b||{}; var o={}; Object.keys(a).forEach(function(k){o[k]=a[k];}); Object.keys(b).forEach(function(k){ o[k]=Math.max(o[k]||0,b[k]||0); }); return o; }
@@ -240,6 +241,7 @@ function mergeClient(a, b){
   m.messages = unionBy((a.messages||[]).concat(b.messages||[]), function(x){ return x.id; });
   m.petitsObjectifs = unionBy((a.petitsObjectifs||[]).concat(b.petitsObjectifs||[]), function(x){ return x.id; });
   m.poValid = Array.from(new Set((a.poValid||[]).concat(b.poValid||[]))).sort();
+  m.chrono = { sessions: unionBy(((a.chrono&&a.chrono.sessions)||[]).concat((b.chrono&&b.chrono.sessions)||[]), function(x){ return x.id; }) };
   m.ergo = maxMerge(a.ergo, b.ergo);
   m.ergoSquat = maxMerge(a.ergoSquat, b.ergoSquat);
   m.ergoFente = maxMerge(a.ergoFente, b.ergoFente);
@@ -260,15 +262,53 @@ function loadClient(id){
     return merged;
   }).catch(function(){ return local; });
 }
-/* sauvegarde = relire le cloud puis fusionner avant d'écrire (anti-écrasement) */
-function saveClient(c){
-  c._mtime = Date.now();
-  writeLS(lkey(c.id), c);
+/* sauvegarde durcie : relire le cloud, fusionner, écrire. JAMAIS d'écrasement à l'aveugle :
+   si le réseau coupe, on garde en local + file d'attente, vidée automatiquement plus tard. */
+var PKEY_PENDING="exhome_v2_pending";
+function getPending(){ try{ return JSON.parse(localStorage.getItem(PKEY_PENDING)||"[]"); }catch(e){ return []; } }
+function setPendingList(a){ try{ localStorage.setItem(PKEY_PENDING, JSON.stringify(a)); }catch(e){} }
+function markPending(id){ var p=getPending(); if(p.indexOf(id)<0){ p.push(id); setPendingList(p); } }
+function clearPending(id){ setPendingList(getPending().filter(function(x){ return x!==id; })); }
+function pushClient(c){
   return cloudGet(ckey(c.id)).then(function(cloud){
     var merged = mergeClient(cloud, c); merged._mtime = Date.now();
     writeLS(lkey(merged.id), merged);
-    return cloudPut(ckey(merged.id), merged).then(function(){ return merged; });
-  }).catch(function(){ return cloudPut(ckey(c.id), c).then(function(){ return c; }); });
+    return cloudPut(ckey(merged.id), merged).then(function(){ clearPending(merged.id); return merged; });
+  });
+}
+function saveClient(c){
+  c._mtime = Date.now();
+  writeLS(lkey(c.id), c);
+  return pushClient(c).catch(function(){ markPending(c.id); return c; });
+}
+function flushPending(){
+  var p=getPending(); if(!p.length) return Promise.resolve();
+  return Promise.all(p.map(function(id){
+    var local=readLS(lkey(id)); if(!local){ clearPending(id); return Promise.resolve(); }
+    return pushClient(local).catch(function(){});
+  }));
+}
+/* ---- rafraîchissement automatique des écrans partagés ---- */
+var __view=null, __lastSig={};
+function setView(id, isSelf, run){ __view={ id:id, isSelf:isSelf, run:run }; }
+function viewSig(c){ return [c._mtime||0,(c.mesures||[]).length,(c.sante||[]).length,((c.chrono||{}).sessions||[]).length,(c.joursReussis||[]).length].join("|"); }
+function autoRefresh(){
+  if(typeof document!=="undefined" && document.hidden) return;
+  var ae=document.activeElement; if(ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)){ flushPending(); return; }
+  flushPending();
+  var v=__view; if(!v) return;
+  loadClient(v.id).then(function(c){
+    if(!c || !__view || __view.id!==v.id) return;
+    var sig=viewSig(c);
+    if(!(v.id in __lastSig)){ __lastSig[v.id]=sig; return; }
+    if(__lastSig[v.id]===sig) return;
+    __lastSig[v.id]=sig; try{ v.run(c); }catch(e){}
+  }).catch(function(){});
+}
+if(typeof document!=="undefined"){
+  document.addEventListener("visibilitychange", function(){ if(!document.hidden) autoRefresh(); });
+  window.addEventListener("focus", autoRefresh);
+  setInterval(autoRefresh, 20000);
 }
 
 /* ----- roster (liste des clientes) ----- */
@@ -321,7 +361,7 @@ function logout(){ session=null; localStorage.removeItem("exhome_v2_session"); r
 
 var app = document.getElementById("app");
 var __stopCam=null, __stopTimers=null;
-function clear(){ if(__stopCam){ try{__stopCam();}catch(e){} __stopCam=null; } if(__stopTimers){ try{__stopTimers();}catch(e){} __stopTimers=null; } app.innerHTML=""; }
+function clear(){ __view=null; if(__stopCam){ try{__stopCam();}catch(e){} __stopCam=null; } if(__stopTimers){ try{__stopTimers();}catch(e){} __stopTimers=null; } app.innerHTML=""; }
 function toast(msg){ var t=document.createElement("div"); t.className="toast"; t.textContent=msg; document.body.appendChild(t);
   setTimeout(function(){ t.style.opacity="0"; t.style.transition="opacity .4s"; setTimeout(function(){ t.remove(); }, 400); }, 1700); }
 
@@ -452,6 +492,7 @@ function addClientForm(roster){
 /* ---------- ACCUEIL CLIENTE (coach ou cliente) ---------- */
 function openClient(id, isSelf){
   clear();
+  setView(id, isSelf, function(){ openClient(id, isSelf); });
   var loading=el("div","muted center","Chargement…"); loading.style.margin="30px 0"; app.appendChild(loading);
   loadClient(id).then(function(c){
     loading.remove();
@@ -483,6 +524,7 @@ function openClient(id, isSelf){
     app.appendChild(head);
     app.appendChild(homeErgo(c, isSelf));
     var _po=poCard(c, isSelf); if(_po) app.appendChild(_po);
+    app.appendChild(mesuresEncart(c, isSelf));
     app.appendChild(scienceCard(function(){ openPresentation(function(){ openClient(c.id,isSelf); }); }));
 
     // accueil — tuiles premium identiques au launcher
@@ -503,6 +545,7 @@ function openClient(id, isSelf){
     appIcon("compass","Ex Home", function(){ openPresentation(function(){ openClient(c.id,isSelf); }); });
     appIcon("calendar","Valider", function(){ screenProgression(c, isSelf); });
     appIcon("timer","Compteur ergo", function(){ screenCompteur(c, isSelf); });
+    appIcon("chrono","Temps ergo", function(){ screenChrono(c, isSelf); });
     appIcon("drop","Hydratation", function(){ screenHydra(c, isSelf); });
     appIcon("heart","Santé", function(){ screenSante(c, isSelf); });
     appIcon("breath","Respiration", function(){ openRespiration(function(){ openClient(c.id,isSelf); }); });
@@ -537,6 +580,7 @@ var VALIDATIONS=[
 function screenProgression(c, isSelf){
   clear();
   topbar("Progression", c.nom, function(){ openClient(c.id, isSelf); });
+  setView(c.id, isSelf, function(cc){ screenProgression(cc, isSelf); });
   var jours=(c.joursReussis||[]).length, b=belt(jours), nb=nextBelt(jours);
   var head=el("div","card center");
   head.innerHTML='<div class="belt" style="font-size:15px"><span class="dot" style="background:'+b.c+'"></span>Ceinture '+b.n+'</div>'
@@ -570,18 +614,27 @@ function screenProgression(c, isSelf){
 
 /* ---------- MESURES (source unique) ---------- */
 var MES_FIELDS = [
-  { k:"poids",        lab:"Poids",             u:"kg"   },
-  { k:"graisse",      lab:"Masse grasse",      u:"%"    },
-  { k:"muscle",       lab:"Masse musculaire",  u:"%"    },
-  { k:"eau",          lab:"Eau",               u:"%"    },
-  { k:"proteines",    lab:"Protéines",         u:"%"    },
-  { k:"osseuse",      lab:"Masse osseuse",     u:"kg"   },
-  { k:"viscerale",    lab:"Graisse viscérale", u:""     },
-  { k:"bmr",          lab:"Métabolisme basal", u:"kcal" },
-  { k:"imc",          lab:"IMC",               u:""     },
-  { k:"tourTaille",   lab:"Tour de taille",    u:"cm"   },
-  { k:"tourHanches",  lab:"Tour de hanches",   u:"cm"   },
-  { k:"fcRepos",      lab:"FC au repos",       u:"bpm"  }
+  { k:"poids",       lab:"Poids",               u:"kg",   col:"#C9A84C", emoji:"⚖️", low:null,  group:"base"   },
+  { k:"graisse",     lab:"Masse grasse",        u:"%",    col:"#E0852E", emoji:"🔥", low:true,  group:"base"   },
+  { k:"muscle",      lab:"Masse musculaire",    u:"%",    col:"#6FCF97", emoji:"💪", low:false, group:"base"   },
+  { k:"eau",         lab:"Hydratation",         u:"%",    col:"#4FA9D6", emoji:"💧", low:false, group:"base"   },
+  { k:"bmr",         lab:"Métabolisme basal",   u:"kcal", col:"#CDB46A", emoji:"⚡", low:false, group:"base"   },
+  { k:"imc",         lab:"IMC",                 u:"",     col:"#C9A84C", emoji:"📏", low:true,  group:"base"   },
+  { k:"proteines",   lab:"Protéines",           u:"%",    col:"#85BB2F", emoji:"🥚", low:false, group:"avance" },
+  { k:"muscleSquel", lab:"Muscle squelettique", u:"%",    col:"#2F7D5A", emoji:"⚡", low:false, group:"avance" },
+  { k:"masseMaigre", lab:"Masse maigre",        u:"kg",   col:"#6FCF97", emoji:"🟢", low:false, group:"avance" },
+  { k:"osseuse",     lab:"Masse osseuse",       u:"kg",   col:"#A0A0A0", emoji:"🦴", low:false, group:"avance" },
+  { k:"viscerale",   lab:"Graisse viscérale",   u:"",     col:"#E0852E", emoji:"🎯", low:true,  group:"avance" },
+  { k:"sousCutanee", lab:"Graisse sous-cutanée",u:"%",    col:"#EE8100", emoji:"〰️", low:true,  group:"avance" },
+  { k:"ageMeta",     lab:"Âge métabolique",     u:"ans",  col:"#CDB46A", emoji:"⏳", low:true,  group:"avance" },
+  { k:"tourTaille",  lab:"Tour de taille",      u:"cm",   col:"#CB8A55", emoji:"📐", low:true,  group:"avance" },
+  { k:"tourHanches", lab:"Tour de hanches",     u:"cm",   col:"#CB8A55", emoji:"⭕", low:true,  group:"avance" },
+  { k:"tourPoitrine",lab:"Tour de poitrine",    u:"cm",   col:"#CB8A55", emoji:"📐", low:false, group:"avance" },
+  { k:"tourBras",    lab:"Tour de bras",        u:"cm",   col:"#CB8A55", emoji:"💪", low:false, group:"avance" },
+  { k:"tourCuisse",  lab:"Tour de cuisse",      u:"cm",   col:"#CB8A55", emoji:"🦵", low:false, group:"avance" },
+  { k:"tourMollet",  lab:"Tour de mollet",      u:"cm",   col:"#CB8A55", emoji:"🦵", low:false, group:"avance" },
+  { k:"tourCou",     lab:"Tour de cou",         u:"cm",   col:"#CB8A55", emoji:"📐", low:true,  group:"avance" },
+  { k:"fcRepos",     lab:"FC au repos",         u:"bpm",  col:"#E0703A", emoji:"❤️", low:true,  group:"avance" }
 ];
 function visibleMes(c){ return (c.mesures||[]).filter(function(m){ return !m.del; }).sort(function(a,b){ return (b.date||"").localeCompare(a.date||"")||((b._ts||0)-(a._ts||0)); }); }
 
@@ -595,6 +648,17 @@ function screenMesures(c, isSelf){
 
   var mes=visibleMes(c);
   if(!mes.length){ app.appendChild(el("div","card center muted","Aucune mesure pour l'instant. Ajoute la première.")); return; }
+  (function(){
+    var keys=["poids","graisse","muscle","eau","tourTaille"];
+    var avail=keys.filter(function(k){ return mes.filter(function(m){return m[k]!=null;}).length>=2; });
+    if(!avail.length) return;
+    var cc=el("div","card"); cc.appendChild(el("div","eyebrow","Courbe"));
+    var chips=el("div"); chips.style.cssText="display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 10px";
+    var holder=el("div"); var curK=avail[0];
+    function draw(){ var f=MES_FIELDS.filter(function(x){return x.k===curK;})[0]; var vals=mes.slice().filter(function(m){return m[curK]!=null;}).sort(function(a,b){return (a.date||"").localeCompare(b.date||"");}).map(function(m){return m[curK];}); holder.innerHTML=sparkline(vals, f.col)||'<div class="muted">Pas assez de points.</div>'; Array.prototype.forEach.call(chips.children,function(b){ b._paint(); }); }
+    avail.forEach(function(k){ var f=MES_FIELDS.filter(function(x){return x.k===k;})[0]; var b=el("button"); b.type="button"; b.textContent=f.emoji+" "+f.lab; b._paint=function(){ b.style.cssText="font-size:11px;padding:6px 10px;border-radius:16px;cursor:pointer;font-family:inherit;border:1px solid "+(curK===k?"var(--gold)":"var(--border)")+";background:"+(curK===k?"rgba(201,168,76,.16)":"var(--surf)")+";color:"+(curK===k?"var(--gold)":"var(--text)"); }; b.onclick=function(){ curK=k; draw(); }; chips.appendChild(b); });
+    cc.appendChild(chips); cc.appendChild(holder); app.appendChild(cc); draw();
+  })();
 
   // évolution poids (première vs dernière)
   var withPoids=mes.filter(function(m){ return m.poids!=null; });
@@ -607,6 +671,13 @@ function screenMesures(c, isSelf){
       +'<span style="font-weight:800;color:'+(d<=0?"var(--ok)":"var(--orange)")+'">'+(d>0?"+":"")+d.toFixed(1)+' kg</span></div>';
     app.appendChild(ev);
   }
+  (function(){
+    var last=mes[0], prev=mes[1]||null, any=false;
+    var cmp=el("div","card"); cmp.appendChild(el("div","eyebrow","Dernière mesure"+(prev?" · comparée à la précédente":"")));
+    var dl=el("div","muted"); dl.style.cssText="font-size:11px;margin:4px 0 8px"; dl.textContent=fmtDate(last.date)+(prev?"  vs  "+fmtDate(prev.date):""); cmp.appendChild(dl);
+    MES_FIELDS.forEach(function(f){ if(last[f.k]==null) return; any=true; var v=mesVar(f,last[f.k],prev?prev[f.k]:null); var l=el("div","line"); l.innerHTML='<span class="k">'+f.emoji+' '+f.lab+'</span><span class="v">'+last[f.k]+(f.u?" "+f.u:"")+(v?' <span style="color:'+v.col+';font-weight:700">'+v.txt+'</span>':'')+'</span>'; cmp.appendChild(l); });
+    if(any) app.appendChild(cmp);
+  })();
 
   mes.forEach(function(m){
     var card=el("div","card");
@@ -627,13 +698,21 @@ function mesureForm(c, isSelf, existing){
   var card=el("div","card");
   var dateIn=input(m.date||today(), {type:"date"});
   card.appendChild(field("Date", dateIn));
-  var grid=el("div","two");
   var inputs={};
-  MES_FIELDS.forEach(function(f){
-    var i=input(m[f.k]==null?"":m[f.k], {type:"number", inputmode:"decimal", placeholder:f.u||""});
-    inputs[f.k]=i; grid.appendChild(field(f.lab+(f.u?" ("+f.u+")":""), i));
-  });
-  card.appendChild(grid); app.appendChild(card);
+  function mkInput(f){ var i=input(m[f.k]==null?"":m[f.k], {type:"number", inputmode:"decimal", placeholder:f.u||""}); inputs[f.k]=i; return field(f.lab+(f.u?" ("+f.u+")":""), i); }
+  card.appendChild(el("div","eyebrow","Composition (base)")); var spb=el("div"); spb.style.height="8px"; card.appendChild(spb);
+  var gBase=el("div","two"); MES_FIELDS.filter(function(f){return f.group!=="avance";}).forEach(function(f){ gBase.appendChild(mkInput(f)); }); card.appendChild(gBase);
+  var spa=el("div"); spa.style.height="16px"; card.appendChild(spa);
+  card.appendChild(el("div","eyebrow","Mesures avancées")); var spa2=el("div"); spa2.style.height="8px"; card.appendChild(spa2);
+  var gAdv=el("div","two"); MES_FIELDS.filter(function(f){return f.group==="avance";}).forEach(function(f){ gAdv.appendChild(mkInput(f)); }); card.appendChild(gAdv);
+  app.appendChild(card);
+  var imp=el("div","card"); imp.appendChild(el("div","eyebrow","📄 Importer depuis une photo / capture"));
+  var impInfo=el("div","muted"); impInfo.style.cssText="font-size:12px;margin:6px 0 10px;line-height:1.5"; impInfo.textContent="Prends une photo de ta balance ou une capture de son appli : l'IA remplit les champs, tu vérifies, puis tu enregistres."; imp.appendChild(impInfo);
+  var impFile=document.createElement("input"); impFile.type="file"; impFile.accept="image/*"; impFile.style.display="none"; imp.appendChild(impFile);
+  var impBtn=el("button","btn line block","📄 Importer un document / photo"); imp.appendChild(impBtn);
+  var impStatus=el("div","muted"); impStatus.style.cssText="font-size:12px;margin-top:8px;line-height:1.5"; imp.appendChild(impStatus); app.appendChild(imp);
+  impBtn.onclick=function(){ if(!aiKey()){ impStatus.innerHTML="Active d'abord l'IA dans Nutrition → « Reconnaître un plat » (clé API), puis reviens."; return; } impFile.click(); };
+  impFile.onchange=function(){ var ff=this.files[0]; if(!ff) return; var rd=new FileReader(); rd.onload=function(){ var b64=(""+rd.result).split(",")[1]; var mt=(ff.type&&ff.type.indexOf("image/")===0)?ff.type:"image/jpeg"; impStatus.textContent="Lecture du document par l'IA…"; importMeasures(b64,mt,inputs,impStatus); }; rd.readAsDataURL(ff); };
 
   var save=el("button","btn primary block","Enregistrer"); app.appendChild(save);
   save.onclick=function(){
@@ -1495,30 +1574,120 @@ function barWeek(map, goal, color){
 }
 function openDashboard(c, isSelf){
   clear(); topbar("Tableau de bord", c.nom, function(){ openClient(c.id,isSelf); });
+  setView(c.id, isSelf, function(cc){ openDashboard(cc, isSelf); });
+
+  var ph=phraseDuJour();
+  var mot=el("div","card"); mot.style.cssText="background:linear-gradient(135deg,var(--card),var(--surf));border-color:rgba(201,168,76,.4)";
+  mot.innerHTML='<div class="eyebrow" style="color:var(--gold)">✨ Ta motivation du jour</div><div style="font-size:14px;line-height:1.55;margin-top:6px;font-style:italic">'+esc(ph.t)+'</div>';
+  app.appendChild(mot);
+
   var jours=(c.joursReussis||[]).length, b=belt(jours), nb=nextBelt(jours);
   var pr=el("div","card");
-  pr.innerHTML='<div class="row" style="justify-content:space-between"><div><div class="eyebrow">Progression</div><div style="font-size:22px;font-weight:800;margin-top:3px">'+jours+' jours</div></div><span class="belt"><span class="dot" style="background:'+b.c+'"></span>Ceinture '+b.n+'</span></div>'+(nb?'<div class="muted" style="font-size:12px;margin-top:9px">'+(nb.min-jours)+' jours avant la ceinture '+nb.n+'</div>':'');
+  pr.innerHTML='<div class="row" style="justify-content:space-between"><div><div class="eyebrow">Progression</div><div style="font-size:24px;font-weight:800;margin-top:3px">'+jours+' jours</div></div><span class="belt"><span class="dot" style="background:'+b.c+'"></span>Ceinture '+b.n+'</span></div>';
+  if(nb){ var barP=el("div"); barP.style.cssText="height:10px;border-radius:7px;background:var(--surf);border:1px solid var(--border);overflow:hidden;margin-top:10px"; var fp=el("div"); fp.style.cssText="height:100%;width:"+Math.min(100,Math.round(jours/nb.min*100))+"%;background:linear-gradient(90deg,"+b.c+",var(--gold))"; barP.appendChild(fp); pr.appendChild(barP); var tp=el("div","muted"); tp.style.cssText="font-size:12px;margin-top:7px"; tp.textContent=(nb.min-jours)+" jours avant la ceinture "+nb.n; pr.appendChild(tp); }
   app.appendChild(pr);
-  var mes=(c.mesures||[]).filter(function(m){return !m.del && m.poids!=null;}).sort(function(a,b){return (a.date||"").localeCompare(b.date||"");});
-  if(mes.length>=2){
-    var vals=mes.map(function(m){return m.poids;}); var first=vals[0], last=vals[vals.length-1], d=last-first;
-    var card=el("div","card");
-    card.innerHTML='<div class="row" style="justify-content:space-between;margin-bottom:10px"><div class="eyebrow">Poids</div><div style="font-weight:800;color:'+(d<=0?"var(--ok)":"var(--orange)")+'">'+last+' kg ('+(d>0?"+":"")+d.toFixed(1)+')</div></div>'+sparkline(vals,"#C9A84C");
-    app.appendChild(card);
+
+  var sess=((c.chrono&&c.chrono.sessions)||[]).filter(function(s){return !s.del;});
+  var ws=weekStartDate(); var weekSec=sess.filter(function(s){return new Date(s.date)>=ws;}).reduce(function(a,s){return a+(s.sec||0);},0);
+  var taches=(c.audit&&c.audit.taches&&typeof c.audit.taches==="object")?c.audit.taches:{};
+  var domMin=Object.keys(taches).reduce(function(a,k){return a+(parseFloat(taches[k])||0);},0);
+  var te=el("div","card"); te.appendChild(el("div","eyebrow","⏱ Temps ergo optimisé · cette semaine"));
+  var teVal=el("div"); teVal.style.cssText="font-size:22px;font-weight:800;color:var(--ok);margin:4px 0"; teVal.textContent=fmtChrono(weekSec); te.appendChild(teVal);
+  if(domMin>0){ var pctd=Math.min(100,Math.round((weekSec/60)/domMin*100)); var barT=el("div"); barT.style.cssText="height:10px;border-radius:7px;background:var(--surf);border:1px solid var(--border);overflow:hidden"; var ft=el("div"); ft.style.cssText="height:100%;width:"+pctd+"%;background:linear-gradient(90deg,var(--ok),var(--gold))"; barT.appendChild(ft); te.appendChild(barT); var lt=el("div","muted"); lt.style.cssText="font-size:12px;margin-top:7px"; lt.innerHTML=pctd+"% de ton potentiel domestique ("+domMin+" min/sem) transformé en mouvement."; te.appendChild(lt); }
+  else { var ht=el("div","muted"); ht.style.cssText="font-size:12px"; ht.textContent="Renseigne l'inventaire des tâches dans l'audit pour comparer à ton temps domestique."; te.appendChild(ht); }
+  app.appendChild(te);
+
+  var nToday=ergoDay(c,today());
+  var ed=el("div","card"); ed.appendChild(el("div","eyebrow","💪 Mouvements du jour"));
+  var edv=el("div"); edv.style.cssText="font-size:22px;font-weight:800;color:var(--gold);margin:4px 0"; edv.innerHTML=nToday+' <span style="font-size:13px;color:var(--dim);font-weight:600">/ 30 ramassages</span>'; ed.appendChild(edv);
+  var barE=el("div"); barE.style.cssText="height:10px;border-radius:7px;background:var(--surf);border:1px solid var(--border);overflow:hidden"; var fe=el("div"); fe.style.cssText="height:100%;width:"+Math.min(100,Math.round(nToday/30*100))+"%;background:linear-gradient(90deg,var(--gold),var(--ok))"; barE.appendChild(fe); ed.appendChild(barE);
+  ed.insertAdjacentHTML("beforeend", '<div class="eyebrow" style="margin-top:12px">7 derniers jours</div>'+barWeek(ergoTotalMap(c),30,"#C9A84C"));
+  app.appendChild(ed);
+
+  var mesAll=visibleMes(c);
+  if(mesAll.length){
+    var last=mesAll[0], prev=mesAll[1]||null;
+    var tb=el("div","card"); tb.appendChild(el("div","eyebrow","📊 Tableau de mesures"));
+    var dl=el("div","muted"); dl.style.cssText="font-size:11px;margin:4px 0 8px"; dl.textContent="Dernière : "+fmtDate(last.date)+(prev?" · variation vs "+fmtDate(prev.date):""); tb.appendChild(dl);
+    MES_FIELDS.forEach(function(f){ if(last[f.k]==null) return; var v=mesVar(f,last[f.k],prev?prev[f.k]:null); var l=el("div","line"); l.innerHTML='<span class="k">'+f.emoji+' '+f.lab+'</span><span class="v">'+last[f.k]+(f.u?" "+f.u:"")+(v?' <span style="color:'+v.col+';font-weight:700">'+v.txt+'</span>':'')+'</span>'; tb.appendChild(l); });
+    app.appendChild(tb);
+    var pv=mesAll.slice().filter(function(m){return m.poids!=null;}).sort(function(a,b){return (a.date||"").localeCompare(b.date||"");}).map(function(m){return m.poids;});
+    if(pv.length>=2){ var pc=el("div","card"); pc.appendChild(el("div","eyebrow","Courbe du poids")); var sp=el("div");sp.style.height="6px";pc.appendChild(sp); pc.insertAdjacentHTML("beforeend", sparkline(pv,"#C9A84C")); app.appendChild(pc); }
   }
-  var latest=(c.mesures||[]).filter(function(m){return !m.del;}).sort(function(a,b){return (b.date||"").localeCompare(a.date||"");})[0];
-  if(latest && (latest.graisse!=null||latest.muscle!=null||latest.eau!=null)){
-    var comp=el("div","card"); comp.appendChild(el("div","eyebrow","Composition (dernière mesure)")); var sp=el("div"); sp.style.height="8px"; comp.appendChild(sp);
-    [["Masse grasse","graisse","%"],["Masse musculaire","muscle","%"],["Eau","eau","%"],["IMC","imc",""]].forEach(function(f){ if(latest[f[1]]!=null){ var l=el("div","line"); l.innerHTML='<span class="k">'+f[0]+'</span><span class="v">'+latest[f[1]]+(f[2]?" "+f[2]:"")+'</span>'; comp.appendChild(l); } });
-    app.appendChild(comp);
+
+  var hc=el("div","card"); hc.appendChild(el("div","eyebrow","💧 Hydratation · 7 jours")); var s2=el("div"); s2.style.height="6px"; hc.appendChild(s2); hc.insertAdjacentHTML("beforeend", barWeek(c.hydra,8,"#6FCF97")); app.appendChild(hc);
+
+  var pos=(c.petitsObjectifs||[]).filter(function(o){return !o.del;});
+  if(pos.length){ c.poValid=c.poValid||[]; var kk=today(); var done=pos.filter(function(o){return c.poValid.indexOf(kk+":"+o.id)>-1;}).length; var po=el("div","card"); po.innerHTML='<div class="row" style="justify-content:space-between"><div class="eyebrow">🌱 Petits objectifs du jour</div><div style="font-weight:800;color:var(--ok)">'+done+' / '+pos.length+'</div></div>'; app.appendChild(po); }
+
+  var jr=(c.journal||[]).filter(function(e){return !e.del && e.date===today();}); var kc=0; jr.forEach(function(e){kc+=e.kcal||0;}); var target=(c.cibles&&c.cibles.basale)||null;
+  var nc=el("div","card"); nc.innerHTML='<div class="row" style="justify-content:space-between"><div class="eyebrow">🍽️ Nutrition aujourd\'hui</div><div style="font-weight:800;color:var(--gold)">'+Math.round(kc)+(target?' / '+target:'')+' kcal</div></div>'; app.appendChild(nc);
+
+  var sante=(c.sante||[]).filter(function(e){return !e.del;}).sort(function(a,b){return (b.date||"").localeCompare(a.date||"");})[0];
+  if(sante){ var bits=[]; if(sante.humeur!=null) bits.push("Humeur "+sante.humeur+"/5"); if(sante.energie!=null) bits.push("Énergie "+sante.energie+"/5"); if(sante.rpe!=null) bits.push("RPE "+sante.rpe+"/10"); if(sante.sommeil!=null) bits.push("Sommeil "+sante.sommeil+"h"); var hm=el("div","card"); hm.innerHTML='<div class="row" style="justify-content:space-between"><div class="eyebrow">❤️ Dernier check-in</div><div class="muted" style="font-size:12px">'+fmtDate(sante.date)+'</div></div>'+(bits.length?'<div style="margin-top:6px;font-size:13px">'+bits.join(" · ")+'</div>':''); app.appendChild(hm); }
+}
+function fmtChrono(sec){ var h=Math.floor(sec/3600), m=Math.floor(sec%3600/60), s=sec%60; function p(n){return (n<10?"0":"")+n;} return h>0? (h+"h "+p(m)+":"+p(s)) : (p(m)+":"+p(s)); }
+function weekStartDate(){ var d=new Date(); var day=(d.getDay()+6)%7; d.setDate(d.getDate()-day); d.setHours(0,0,0,0); return d; }
+function screenChrono(c, isSelf){
+  clear(); topbar("Temps ergo optimisé", c.nom, function(){ openClient(c.id,isSelf); });
+  c.chrono=c.chrono||{sessions:[]};
+  var sessions=(c.chrono.sessions||[]).filter(function(s){ return !s.del; });
+  var todayStr=today(), ws=weekStartDate();
+  function sumSec(fn){ return sessions.filter(fn).reduce(function(a,s){ return a+(s.sec||0); },0); }
+  var todaySec=sumSec(function(s){ return s.date===todayStr; });
+  var weekSec=sumSec(function(s){ return new Date(s.date)>=ws; });
+
+  app.appendChild(el("div","muted","Chronomètre de séance. Lance-le quand tu transformes une tâche du quotidien (ménage, cuisine, repassage…) en mouvement optimisé, ou pendant un programme du coach. Le temps s'accumule et se compare à ton temps domestique."));
+
+  var running=false, startTs=0, base=0, tick=null;
+  var card=el("div","card"); card.style.textAlign="center";
+  var disp=el("div"); disp.style.cssText="font-family:monospace;font-size:46px;font-weight:900;letter-spacing:.05em;color:var(--gold);margin:8px 0 4px"; disp.textContent=fmtChrono(0); card.appendChild(disp);
+  var sub=el("div","muted"); sub.style.cssText="font-size:12px;margin-bottom:14px"; card.appendChild(sub);
+  function refreshSub(){ sub.innerHTML="Aujourd'hui : <b style=\"color:var(--ok)\">"+fmtChrono(todaySec)+"</b> · "+sessions.filter(function(s){return s.date===todayStr;}).length+" session(s)"; }
+  refreshSub();
+  var row=el("div"); row.style.cssText="display:flex;gap:10px;justify-content:center";
+  var startBtn=el("button","btn primary","▶ Démarrer"); startBtn.style.flex="1";
+  var stopBtn=el("button","btn line","■ Arrêter"); stopBtn.style.flex="1"; stopBtn.disabled=true;
+  row.appendChild(startBtn); row.appendChild(stopBtn); card.appendChild(row); app.appendChild(card);
+
+  function cur(){ return base + (running? Math.floor((Date.now()-startTs)/1000):0); }
+  function paint(){ disp.textContent=fmtChrono(cur()); }
+  __stopTimers=function(){ if(tick) clearInterval(tick); running=false; };
+  startBtn.onclick=function(){
+    if(running){ base=cur(); running=false; clearInterval(tick); startBtn.textContent="▶ Reprendre"; disp.style.color="var(--gold)"; }
+    else { running=true; startTs=Date.now(); tick=setInterval(paint,500); startBtn.textContent="⏸ Pause"; stopBtn.disabled=false; disp.style.color="var(--ok)"; }
+  };
+  stopBtn.onclick=function(){
+    var total=cur(); running=false; clearInterval(tick);
+    if(total<3){ base=0; paint(); startBtn.textContent="▶ Démarrer"; stopBtn.disabled=true; disp.style.color="var(--gold)"; return; }
+    var s={ id:genId(), date:today(), sec:total, _ts:Date.now() }; c.chrono.sessions=(c.chrono.sessions||[]).concat([s]);
+    startBtn.disabled=true; stopBtn.disabled=true; startBtn.textContent="Enregistrement…";
+    saveClient(c).then(function(m){ Object.assign(c,m); toast("Session enregistrée : "+fmtChrono(total)); screenChrono(c,isSelf); });
+  };
+
+  var taches=(c.audit&&c.audit.taches&&typeof c.audit.taches==="object")?c.audit.taches:{};
+  var domMin=Object.keys(taches).reduce(function(a,k){ return a+(parseFloat(taches[k])||0); },0);
+  if(domMin>0){
+    var pot=el("div","card"); pot.appendChild(el("div","eyebrow","Temps ergo vs temps domestique"));
+    var info=el("div","muted"); info.style.cssText="font-size:12px;line-height:1.5;margin:6px 0 10px"; info.innerHTML="Ton inventaire d'audit représente <b style=\"color:var(--gold)\">"+domMin+" min/sem</b> (≈ "+(Math.round(domMin/60*10)/10)+" h) de tâches domestiques — autant de mouvement à optimiser."; pot.appendChild(info);
+    var weekMin=Math.round(weekSec/60), pct=domMin>0?Math.min(100, Math.round(weekMin/domMin*100)):0;
+    var bar=el("div"); bar.style.cssText="height:12px;border-radius:8px;background:var(--surf);border:1px solid var(--border);overflow:hidden";
+    var fill=el("div"); fill.style.cssText="height:100%;width:"+pct+"%;background:linear-gradient(90deg,var(--ok),var(--gold))"; bar.appendChild(fill); pot.appendChild(bar);
+    var lab=el("div"); lab.style.cssText="font-size:12px;margin-top:8px"; lab.innerHTML="Cette semaine : <b style=\"color:var(--ok)\">"+fmtChrono(weekSec)+"</b> optimisées · <b style=\"color:var(--gold)\">"+pct+"%</b> de ton potentiel domestique."; pot.appendChild(lab);
+    app.appendChild(pot);
+  } else {
+    var hint=el("div","card"); hint.style.cssText="font-size:12px;line-height:1.5"; hint.className="card muted"; hint.innerHTML="Renseigne l'inventaire des tâches ménagères dans l'<b>Audit découverte</b> pour voir ton « temps domestique à optimiser » et le comparer à ton temps ergo."; app.appendChild(hint);
   }
-  var ec=el("div","card"); ec.appendChild(el("div","eyebrow","Compteur ergo · 7 jours")); var s1=el("div"); s1.style.height="6px"; ec.appendChild(s1);
-  ec.insertAdjacentHTML("beforeend", barWeek(ergoTotalMap(c), 30, "#C9A84C")); app.appendChild(ec);
-  var hc=el("div","card"); hc.appendChild(el("div","eyebrow","Hydratation · 7 jours")); var s2=el("div"); s2.style.height="6px"; hc.appendChild(s2);
-  hc.insertAdjacentHTML("beforeend", barWeek(c.hydra, 8, "#6FCF97")); app.appendChild(hc);
-  var jr=(c.journal||[]).filter(function(e){return !e.del && e.date===today();}); var kc=0; jr.forEach(function(e){kc+=e.kcal||0;});
-  var target=(c.cibles&&c.cibles.basale)||null;
-  var nc=el("div","card"); nc.innerHTML='<div class="row" style="justify-content:space-between"><div class="eyebrow">Nutrition aujourd\'hui</div><div style="font-weight:800;color:var(--gold)">'+Math.round(kc)+(target?' / '+target:'')+' kcal</div></div>'; app.appendChild(nc);
+
+  if(sessions.length){
+    var hcard=el("div","card"); hcard.appendChild(el("div","eyebrow","Historique des sessions"));
+    var byDate={}; sessions.forEach(function(s){ (byDate[s.date]=byDate[s.date]||[]).push(s); });
+    Object.keys(byDate).sort().reverse().slice(0,14).forEach(function(date){ var arr=byDate[date], tot=arr.reduce(function(a,s){return a+(s.sec||0);},0); var l=el("div","line"); l.innerHTML='<span class="k">'+fmtDate(date)+' · '+arr.length+' session(s)</span><span class="v">'+fmtChrono(tot)+'</span>'; hcard.appendChild(l); });
+    app.appendChild(hcard);
+    var clr=el("button","btn ghost block","Effacer la dernière session"); clr.style.marginTop="10px";
+    clr.onclick=function(){ var last=(c.chrono.sessions||[]).filter(function(s){return !s.del;}).sort(function(a,b){return (b._ts||0)-(a._ts||0);})[0]; if(!last) return; last.del=true; last._ts=Date.now(); saveClient(c).then(function(m){Object.assign(c,m); toast("Session supprimée"); screenChrono(c,isSelf);}); };
+    app.appendChild(clr);
+  }
 }
 
 /* ===================== Programme & Séances ===================== */
@@ -1673,7 +1842,7 @@ function openPosture(c, isSelf){
 var SCALE_FIELDS=[
   {k:"poids",lab:"Poids",u:"kg"},{k:"graisse",lab:"Masse grasse",u:"%"},{k:"muscle",lab:"Masse musculaire",u:"%"},
   {k:"eau",lab:"Eau",u:"%"},{k:"imc",lab:"IMC",u:""},{k:"osseuse",lab:"Masse osseuse",u:"kg"},
-  {k:"metabolisme",lab:"Métabolisme",u:"kcal"},{k:"viscerale",lab:"Graisse viscérale",u:""}
+  {k:"bmr",lab:"Métabolisme basal",u:"kcal"},{k:"viscerale",lab:"Graisse viscérale",u:""}
 ];
 function openScan(c, isSelf){
   clear(); topbar("Scan balance", c.nom, function(){ openClient(c.id,isSelf); });
@@ -1703,7 +1872,7 @@ var AUDIT_SCHEMA=[
    ["contexte","Contexte de vie","Domicile, rythme, contraintes…",true],
    ["aide","Aide à domicile","Femme de ménage, aide…"]
  ]},
- {t:"2 · Objectifs & motivations", f:[
+ {t:"2 · Objectifs & motivations", checks:"objectifs", f:[
    ["objPrincipal","Objectif principal",""],
    ["objMots","Objectif formulé par la personne (ses mots)","Ce que la personne souhaite améliorer…",true],
    ["obj1mois","Objectif 1 mois",""],
@@ -1714,24 +1883,23 @@ var AUDIT_SCHEMA=[
    ["echeance","Échéance / motivation immédiate","Ex : mariage en juin…"],
    ["freins","Freins / obstacles","Ex : manque de temps…",true]
  ]},
- {t:"3 · Antécédents & pathologies", f:[
+ {t:"3 · Antécédents & pathologies", checks:"pathologies", f:[
    ["antecedents","Suivi médical / antécédents","Médicaments, kiné, ostéo…",true],
    ["limitations","Limitations / précautions","Ex : Lombaires fragiles, éviter flexions…",true],
    ["douleur","Difficulté / douleur actuelle",""]
  ]},
- {t:"4 · Sédentarité & activité physique", f:[
+ {t:"4 · Sédentarité & activité physique", checks:"sedentarite", f:[
    ["sedentarite","Niveau de sédentarité global",""],
    ["activiteActuelle","Activité physique actuelle","Ex : Marche consciente 10 min"],
    ["activiteObs","Observations","",true]
  ]},
- {t:"5 · Habitudes & tâches ménagères — inventaire ergo", f:[
-   ["taches","Tâches du quotidien","Ex : Repasser le linge en gainage…",true],
+ {t:"5 · Habitudes & tâches ménagères — inventaire ergo", inventory:true, f:[
    ["obsModeVie","Observations sur le mode de vie","",true]
  ]},
- {t:"6 · Mesures corporelles", note:"Les mesures (poids, masse grasse, muscle, eau…) se saisissent dans Mesures / Scan balance et alimentent le tableau de bord.", f:[
+ {t:"6 · Mesures de référence (audit)", baseline:true, f:[
    ["mesuresObs","Observations / conditions de mesure","Observations, conditions de mesure…",true]
  ]},
- {t:"7 · Bilan postural & observations ergoptimiste", f:[
+ {t:"7 · Bilan postural & observations ergoptimiste", checks:"postural", f:[
    ["posture","Posture & alignement",""],
    ["obsPosture","Observations posturales détaillées","",true],
    ["tensions","Zones de tension, compensations, asymétries","Zones de tension, compensations, asymétries…",true],
@@ -1740,7 +1908,7 @@ var AUDIT_SCHEMA=[
    ["priorites","Priorités pour la personne","Priorités pour la personne…",true],
    ["recommandations","Recommandations prioritaires","",true]
  ]},
- {t:"8 · Bilan nutritionnel", f:[
+ {t:"8 · Bilan nutritionnel", checks:"nutrition", f:[
    ["nutHabitudes","Habitudes alimentaires","Repas, horaires, équilibre…",true],
    ["nutGrignotage","Grignotage / sucre","Ex : pas de sucre dans le café…"],
    ["nutHydratation","Hydratation","Eau / jour, boissons…"],
@@ -1771,6 +1939,9 @@ function printAudit(c){
   H+='<div class="sub">Ex Home · Document confidentiel · RGPD · Usage exclusif</div>';
   AUDIT_SCHEMA.forEach(function(S){
     var rows="";
+    if(S.inventory){ var td=(a.taches&&typeof a.taches==="object")?a.taches:{}, tot=0; TACHES_MENAGERES.forEach(function(cat){ var sub=""; var s=0; cat.items.forEach(function(it){ var v=td[it.k]; if(v){ sub+='<div class="f"><div class="k">'+esc(it.lab)+'</div><div class="v">'+v+' min/sem</div></div>'; s+=(+v||0); } }); if(sub){ rows+='<div style="font-weight:bold;color:#1B4D3E;margin-top:8px">'+esc(cat.titre)+' — '+s+' min/sem</div>'+sub; tot+=s; } }); if(tot){ rows+='<div class="f" style="border-top:1px solid #C9A84C;margin-top:8px;padding-top:6px"><div class="k">Total temps domestique</div><div class="v">'+tot+' min/sem ('+(Math.round(tot/60*10)/10)+' h/sem)</div></div>'; } }
+    if(S.checks){ (AUDIT_CHECKS[S.checks]||[]).forEach(function(g,gi){ var picked=g[1].filter(function(lab){ return a.checks && a.checks[S.checks+"|"+gi+"|"+lab]; }); if(picked.length){ rows+='<div style="font-weight:bold;color:#1B4D3E;margin-top:6px">'+esc(g[0])+'</div><div class="v">'+esc(picked.join(", "))+'</div>'; } }); }
+    if(S.baseline){ var mb=(a.baselineMesureId)?((c.mesures||[]).filter(function(m){return m.id===a.baselineMesureId;})[0]||null):null; if(mb){ BASE_MES_KEYS.forEach(function(k){ var f=MES_FIELDS.filter(function(x){return x.k===k;})[0]; if(f&&mb[k]!=null){ rows+='<div class="f"><div class="k">'+esc(f.lab)+'</div><div class="v">'+mb[k]+(f.u?" "+f.u:"")+'</div></div>'; } }); } }
     S.f.forEach(function(f){ var val=a[f[0]]; if(val){ rows+='<div class="f"><div class="k">'+esc(f[1])+'</div><div class="v">'+esc(val)+'</div></div>'; } });
     if(rows){ H+='<h2>'+esc(S.t)+'</h2>'+rows; }
   });
@@ -1789,18 +1960,78 @@ function printAudit(c){
   setTimeout(function(){ try{ w.focus(); w.print(); }catch(e){} }, 500);
 }
 
+var TACHES_MENAGERES=[{titre:"CUISINE",items:[{k:"cuisine_vaisselle",lab:"Faire la vaisselle à la main"},{k:"cuisine_lv",lab:"Utilisation du lave-vaisselle"},{k:"cuisine_repas",lab:"Préparer les repas"},{k:"cuisine_courses",lab:"Ranger les courses"},{k:"cuisine_poubelles",lab:"Vider les poubelles"},{k:"cuisine_plans",lab:"Nettoyer les plans de travail"},{k:"cuisine_sol",lab:"Nettoyer la cuisine (sol, équipements)"}]},{titre:"ENTRETIEN SOL & SURFACES",items:[{k:"sol_aspirateur",lab:"Passer l'aspirateur"},{k:"sol_balayer",lab:"Balayer / serpillière"},{k:"sol_genoux",lab:"Laver le sol à genoux"},{k:"sol_plinthes",lab:"Nettoyer les plinthes"},{k:"sol_meubles",lab:"Dépoussiérer les meubles"},{k:"sol_vitres",lab:"Nettoyer les vitres"},{k:"sol_hautes",lab:"Nettoyer les surfaces hautes"}]},{titre:"LINGE",items:[{k:"linge_trier",lab:"Trier le linge"},{k:"linge_machine",lab:"Mettre en machine / sortir le linge"},{k:"linge_etendre",lab:"Étendre le linge"},{k:"linge_plier",lab:"Plier et ranger le linge"},{k:"linge_repasser",lab:"Repasser"},{k:"linge_armoires",lab:"Ranger dans les armoires"}]},{titre:"CHAMBRE & SALON",items:[{k:"salon_lits",lab:"Faire les lits"},{k:"salon_draps",lab:"Changer les draps"},{k:"salon_ranger",lab:"Ranger / désencombrer"},{k:"salon_meubles",lab:"Déplacer des meubles / objets lourds"}]},{titre:"SALLE DE BAIN & WC",items:[{k:"sdb_douche",lab:"Nettoyer la baignoire / douche"},{k:"sdb_wc",lab:"Nettoyer les toilettes"},{k:"sdb_lavabo",lab:"Nettoyer le lavabo"}]},{titre:"EXTÉRIEUR & DIVERS",items:[{k:"ext_jardinage",lab:"Jardinage"},{k:"ext_tondre",lab:"Tondre la pelouse"},{k:"ext_charges",lab:"Monter / descendre des charges"},{k:"ext_voiture",lab:"Nettoyage voiture"},{k:"ext_cartons",lab:"Trier / déplacer des cartons"},{k:"ext_sacs",lab:"Courses alimentaires (port de sacs)"}]}];
+function renderTachesInventory(card, c, coach){
+  c.audit=c.audit||{}; var data=(c.audit.taches&&typeof c.audit.taches==="object")?c.audit.taches:{};
+  var inputs={};
+  var intro=el("div","muted"); intro.style.cssText="font-size:12px;line-height:1.5;margin-bottom:6px"; intro.textContent="Temps passé par semaine sur chaque tâche du quotidien. C'est la base de l'ergoptimisation : ce temps devient du mouvement."; card.appendChild(intro);
+  var grandEl=el("div"); grandEl.style.cssText="font-weight:800;color:var(--gold);white-space:nowrap";
+  function recalcAll(){ var tot=0; TACHES_MENAGERES.forEach(function(cat){ var s=0; cat.items.forEach(function(it){ s+=parseFloat(inputs[it.k].value)||0; }); if(cat._sub) cat._sub.textContent=s? s+" min/sem":""; tot+=s; }); grandEl.textContent=tot? (tot+" min/sem · ≈ "+(Math.round(tot/60*10)/10)+" h/sem") : "—"; }
+  TACHES_MENAGERES.forEach(function(cat){
+    var ch=el("div"); ch.style.cssText="margin:14px 0 2px;display:flex;justify-content:space-between;align-items:center";
+    var ct=el("div"); ct.style.cssText="font-size:12px;font-weight:700;letter-spacing:.04em;color:var(--gold)"; ct.textContent=cat.titre;
+    var sub=el("div","muted"); sub.style.cssText="font-size:11px"; cat._sub=sub;
+    ch.appendChild(ct); ch.appendChild(sub); card.appendChild(ch);
+    cat.items.forEach(function(it){
+      var row=el("div"); row.style.cssText="display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--border)";
+      var lab=el("div"); lab.style.cssText="flex:1;font-size:13px;line-height:1.35"; lab.textContent=it.lab;
+      var i=input(data[it.k]!=null?data[it.k]:"", {type:"number",inputmode:"numeric",placeholder:"min/sem"}); i.style.width="92px"; i.style.flex="none"; i.style.textAlign="center"; if(!coach){ i.disabled=true; i.style.opacity=".85"; }
+      i.addEventListener("input",recalcAll); inputs[it.k]=i;
+      row.appendChild(lab); row.appendChild(i); card.appendChild(row);
+    });
+  });
+  var totRow=el("div"); totRow.style.cssText="display:flex;justify-content:space-between;align-items:center;margin-top:16px;padding-top:12px;border-top:2px solid var(--gold)";
+  var tl=el("div"); tl.style.cssText="font-weight:700;font-size:14px"; tl.textContent="Total temps domestique"; totRow.appendChild(tl); totRow.appendChild(grandEl); card.appendChild(totRow);
+  recalcAll();
+  return inputs;
+}
+
+var AUDIT_CHECKS={"objectifs":[["Objectifs visés",["Réduire les douleurs chroniques","Améliorer la posture","Gagner en énergie au quotidien","Perdre du poids / affiner","Renforcer les muscles","Améliorer la mobilité","Réduire le stress / anxiété","Mieux dormir","Optimiser les gestes du quotidien","Prévention / bien-être"]]],"pathologies":[["Ostéo-articulaire",["Lombalgie chronique","Hernie discale","Cervicalgie","Arthrose (genou/hanche/épaule)","Tendinite","Entorse récurrente","Scoliose/cyphose/lordose","Ostéoporose","Fracture récente","Prothèse (hanche/genou)","Syndrome canal carpien"]],["Cardio-métabolique",["Hypertension artérielle","Hypotension","Diabète type 1","Diabète type 2","Surpoids/obésité","Cholestérol élevé","Maladie cardiaque","Varices/insuffisance veineuse"]],["Neuro & humeur",["Fibromyalgie","Syndrome d'épuisement (burnout)","Anxiété/dépression","Migraines chroniques","Sciatique/névralgie","Parkinson","SEP (sclérose en plaques)","Troubles du sommeil"]],["Digestif & respiratoire",["Reflux gastro-œsophagien","Syndrome côlon irritable","Asthme","Apnée du sommeil","BPCO"]],["Gynéco & périnée",["Grossesse en cours","Post-partum (< 1 an)","Ménopause","Prolapsus/descente d'organes","Incontinence légère","Endométriose"]]],"sedentarite":[["Travail",["Travail assis bureau (>6h/j)","Travail debout statique","Travail en déplacement/terrain","Travail physique/manuel","Retraité(e)","Sans activité professionnelle","Étudiant(e)","Télétravail"]],["Transport",["Voiture (>30 min/j)","Transports en commun","Vélo/trottinette","Marche à pied","Mixte"]],["Activité physique",["Aucune activité","Marche occasionnelle","Marche quotidienne (>30 min)","Sport 1x/semaine","Sport 2-3x/semaine","Sport >3x/semaine","Natation","Vélo/cycling","Running/jogging","Yoga/Pilates","Musculation/fitness","Sport collectif","Danse","Arts martiaux"]],["À la maison",["Sédentaire (TV/écran le soir)","Actif(ve) à la maison","Jardinage régulier","Bricolage fréquent","Animaux de compagnie (promenades)","Garde d'enfants en bas âge"]]],"postural":[["Observations posturales",["Posture correcte","Hyperlordose lombaire","Hypercyphose dorsale","Tête en avant (antépulsion)","Épaules enroulées","Déséquilibre gauche/droite","Genoux en valgus (rentrés)","Genoux en varus (ouverts)","Pieds en rotation externe","Voûte plantaire effondrée","Tension cervicale visible"]]],"nutrition":[["Rythme des repas",["Petit-déjeuner régulier","Déjeuner régulier","Dîner régulier","Collation matin","Collation après-midi","Saute des repas"]],["Habitudes",["Grignotage","Sucre dans café/thé","Boissons sucrées","Alcool régulier","Repas devant écran","Mange rapidement","Cuisine maison"]],["Profil alimentaire",["Végétarien","Végan","Sans gluten","Sans lactose","Jeûne intermittent","Allergies / intolérances"]],["Hydratation",["Moins d'1 L/jour","1 à 1,5 L/jour","Plus d'1,5 L/jour","Café régulier","Thé régulier"]]]};
+var BASE_MES_KEYS=MES_FIELDS.map(function(f){return f.k;});
+function renderChecks(card, slot, c, coach){
+  c.audit=c.audit||{}; c.audit.checks=c.audit.checks||{};
+  (AUDIT_CHECKS[slot]||[]).forEach(function(g, gi){
+    var h=el("div"); h.style.cssText="font-size:12px;font-weight:700;color:var(--gold);margin:14px 0 8px"; h.textContent=g[0]; card.appendChild(h);
+    var wrap=el("div"); wrap.style.cssText="display:flex;flex-wrap:wrap;gap:7px";
+    g[1].forEach(function(lab){
+      var key=slot+"|"+gi+"|"+lab; var on=!!c.audit.checks[key];
+      var chip=el("button"); chip.type="button"; chip.textContent=lab;
+      function paint(){ chip.style.cssText="font-size:12px;padding:7px 11px;border-radius:18px;cursor:pointer;font-family:inherit;border:1px solid "+(on?"var(--gold)":"var(--border)")+";background:"+(on?"rgba(201,168,76,.16)":"var(--surf)")+";color:"+(on?"var(--gold)":"var(--text)"); }
+      paint();
+      if(coach){ chip.onclick=function(){ on=!on; if(on) c.audit.checks[key]=true; else delete c.audit.checks[key]; paint(); }; } else { chip.disabled=true; chip.style.opacity=".92"; }
+      wrap.appendChild(chip);
+    });
+    card.appendChild(wrap);
+  });
+}
+function renderBaselineMeasures(card, c, coach){
+  var info=el("div","muted"); info.style.cssText="font-size:12px;line-height:1.5;margin-bottom:10px"; info.textContent="Mesures de référence prises lors de l'audit — les mêmes mesures que dans l'écran Mesures, pour une cohérence totale du suivi."; card.appendChild(info);
+  var base=null; if(c.audit&&c.audit.baselineMesureId){ base=(c.mesures||[]).filter(function(m){return m.id===c.audit.baselineMesureId && !m.del;})[0]||null; }
+  var inputs={};
+  function mk(f){ var i=input(base&&base[f.k]!=null?base[f.k]:"", {type:"number",inputmode:"decimal",placeholder:f.u||""}); if(!coach){ i.disabled=true; i.style.opacity=".85"; } inputs[f.k]=i; return field(f.lab+(f.u?" ("+f.u+")":""), i); }
+  card.appendChild(el("div","eyebrow","Composition (base)")); var sb=el("div"); sb.style.height="8px"; card.appendChild(sb);
+  var g1=el("div","two"); MES_FIELDS.filter(function(f){return f.group!=="avance";}).forEach(function(f){ g1.appendChild(mk(f)); }); card.appendChild(g1);
+  var sm=el("div"); sm.style.height="16px"; card.appendChild(sm);
+  card.appendChild(el("div","eyebrow","Mesures avancées & tours")); var sa=el("div"); sa.style.height="8px"; card.appendChild(sa);
+  var g2=el("div","two"); MES_FIELDS.filter(function(f){return f.group==="avance";}).forEach(function(f){ g2.appendChild(mk(f)); }); card.appendChild(g2);
+  return inputs;
+}
+
 function openAudit(c, isSelf){
   clear(); topbar("Audit découverte", c.nom, function(){ openClient(c.id,isSelf); });
   var coach=isCoach(); c.audit=c.audit||{};
   var top=el("div","muted"); top.style.cssText="font-size:11px;letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px"; top.textContent="Document confidentiel · RGPD · Usage exclusif Ex Home"; app.appendChild(top);
   app.appendChild(el("div","muted", coach? "Audit découverte — ergoptimisation & nutrition. Le bilan nutritionnel nourrit cet audit." : "Ton audit découverte, défini avec ton coach."));
-  var fields={};
+  var fields={}, tachesInputs=null, baseInputs=null;
   function sec(t){ var card=el("div","card"); card.appendChild(el("div","eyebrow",t)); var sp=el("div"); sp.style.height="10px"; card.appendChild(sp); app.appendChild(card); return card; }
   function add(card,key,label,ph,multi){ var i= multi? textarea(c.audit[key],ph) : input(c.audit[key],{placeholder:ph||""}); if(!coach){ i.disabled=true; i.style.opacity=".85"; } fields[key]=i; card.appendChild(field(label,i)); }
   AUDIT_SCHEMA.forEach(function(S){
     var card=sec(S.t);
     if(S.note){ var n=el("div","muted"); n.style.cssText="font-size:13px;line-height:1.5;margin-bottom:8px"; n.textContent=S.note; card.appendChild(n);
       var go=el("button","btn ghost","Ouvrir les mesures"); go.style.margin="0 0 12px"; go.onclick=function(){ screenMesures(c,isSelf); }; card.appendChild(go); }
+    if(S.checks){ renderChecks(card, S.checks, c, coach); }
+    if(S.baseline){ baseInputs=renderBaselineMeasures(card, c, coach); }
+    if(S.inventory){ tachesInputs=renderTachesInventory(card, c, coach); }
     S.f.forEach(function(f){ add(card, f[0], f[1], f[2]||"", f[3]||false); });
   });
 
@@ -1834,7 +2065,7 @@ function openAudit(c, isSelf){
 
   if(coach){
     var save=el("button","btn primary block","Enregistrer l'audit découverte"); app.appendChild(save);
-    save.onclick=function(){ Object.keys(fields).forEach(function(k){ c.audit[k]=fields[k].value; }); c.audit.rgpd=rgpdChk.checked; c.audit.dateSignature=dateInp.value; if(sigC) c.audit.sigClient=sigC.data(); if(sigK) c.audit.sigCoach=sigK.data(); c.audit._ts=Date.now(); save.disabled=true; save.textContent="Enregistrement…"; saveClient(c).then(function(m){Object.assign(c,m); toast("Audit découverte enregistré"); openAudit(c,isSelf);}); };
+    save.onclick=function(){ Object.keys(fields).forEach(function(k){ c.audit[k]=fields[k].value; }); if(tachesInputs){ var tobj={}; Object.keys(tachesInputs).forEach(function(k){ var v=parseFloat(tachesInputs[k].value); if(!isNaN(v)&&v>0) tobj[k]=v; }); c.audit.taches=tobj; } if(baseInputs){ var mb=null; if(c.audit.baselineMesureId){ mb=(c.mesures||[]).filter(function(m){return m.id===c.audit.baselineMesureId;})[0]||null; } if(!mb) mb={id:genId(),date:today()}; var anyB=false; BASE_MES_KEYS.forEach(function(k){ var v=num(baseInputs[k].value); if(v==null) delete mb[k]; else { mb[k]=v; anyB=true; } }); if(anyB){ mb._ts=Date.now(); mb.del=false; if((c.mesures||[]).some(function(m){return m.id===mb.id;})){ c.mesures=c.mesures.map(function(m){return m.id===mb.id?mb:m;}); } else { c.mesures=(c.mesures||[]).concat([mb]); } c.audit.baselineMesureId=mb.id; } } c.audit.rgpd=rgpdChk.checked; c.audit.dateSignature=dateInp.value; if(sigC) c.audit.sigClient=sigC.data(); if(sigK) c.audit.sigCoach=sigK.data(); c.audit._ts=Date.now(); save.disabled=true; save.textContent="Enregistrement…"; saveClient(c).then(function(m){Object.assign(c,m); toast("Audit découverte enregistré"); openAudit(c,isSelf);}); };
   }
   var pdf=el("button","btn line block","🖨️ Imprimer / Télécharger en PDF"); pdf.style.marginTop="10px"; pdf.onclick=function(){ printAudit(c); }; app.appendChild(pdf);
 }
@@ -2169,6 +2400,54 @@ function openFoodAI(c, isSelf){
       })
       .catch(function(){ status.innerHTML='<span style="color:var(--orange)">Connexion impossible à l\'IA. Vérifie ta clé et ta connexion.</span>'; });
   }
+}
+
+function mesVar(f, cur, prev){
+  if(prev==null||cur==null) return null;
+  var d=Math.round((cur-prev)*10)/10, col;
+  if(d===0){ col="var(--dim)"; }
+  else if(f.low===null||typeof f.low==="undefined"){ col="var(--gold)"; }
+  else { var good=(f.low? d<0 : d>0); col=good?"var(--ok)":"var(--orange)"; }
+  return { d:d, col:col, txt:(d>0?"+":"")+d };
+}
+function mesuresEncart(c, isSelf){
+  var mes=visibleMes(c);
+  var card=el("div","card");
+  card.appendChild(el("div","eyebrow","Mes mesures"));
+  if(!mes.length){
+    var p=el("div","muted"); p.style.cssText="font-size:13px;margin:6px 0 10px"; p.textContent="Aucune mesure encore. Ajoute ta première pesée."; card.appendChild(p);
+    var b=el("button","btn primary block","+ Ajouter une mesure"); b.onclick=function(){ mesureForm(c,isSelf,null); }; card.appendChild(b);
+    return card;
+  }
+  var last=mes[0], prev=mes[1]||null;
+  var dl=el("div","muted"); dl.style.cssText="font-size:11px;margin:4px 0 10px"; dl.textContent="Dernière pesée : "+fmtDate(last.date); card.appendChild(dl);
+  var grid=el("div"); grid.style.cssText="display:grid;grid-template-columns:1fr 1fr;gap:10px";
+  ["poids","graisse","muscle","eau"].forEach(function(k){
+    var f=MES_FIELDS.filter(function(x){return x.k===k;})[0]; if(!f||last[f.k]==null) return;
+    var v=mesVar(f, last[f.k], prev?prev[f.k]:null);
+    var cell=el("div"); cell.style.cssText="background:var(--surf);border:1px solid var(--border);border-radius:12px;padding:11px 12px";
+    cell.innerHTML='<div class="muted" style="font-size:11px">'+f.emoji+' '+f.lab+'</div>'
+      +'<div style="font-size:20px;font-weight:800;color:'+f.col+';margin-top:3px">'+last[f.k]+'<span style="font-size:11px;font-weight:600;color:var(--dim)"> '+f.u+'</span></div>'
+      +(v?'<div style="font-size:11px;font-weight:700;color:'+v.col+';margin-top:2px">'+v.txt+' '+f.u+'</div>':'<div style="font-size:11px;color:var(--dim);margin-top:2px">—</div>');
+    grid.appendChild(cell);
+  });
+  card.appendChild(grid);
+  var more=el("button","btn ghost block","+ Toutes les mesures & comparaison"); more.style.marginTop="12px"; more.onclick=function(){ screenMesures(c,isSelf); }; card.appendChild(more);
+  return card;
+}
+function importMeasures(b64, mt, inputs, status){
+  var keys=MES_FIELDS.map(function(f){return f.k;});
+  var prompt="Voici une photo d'un pèse-personne à impédance ou une capture de son application. Extrais les valeurs numériques. Réponds UNIQUEMENT en JSON avec ces clés (mets null si absent) : "+keys.join(", ")+". Donne uniquement des nombres, sans unités.";
+  var body={ model:"claude-sonnet-4-6", max_tokens:700, messages:[{role:"user",content:[{type:"image",source:{type:"base64",media_type:mt,data:b64}},{type:"text",text:prompt}]}] };
+  fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"content-type":"application/json","x-api-key":aiKey(),"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify(body)})
+  .then(function(r){return r.json();}).then(function(d){
+    if(d&&d.error){ status.innerHTML='<span style="color:var(--orange)">Erreur IA : '+esc(d.error.message||"vérifie la clé")+'</span>'; return; }
+    var txt=((d.content||[]).map(function(x){return x.type==="text"?x.text:"";}).join("")).trim();
+    var mm=txt.match(/\{[\s\S]*\}/); var data=null; try{ data=JSON.parse(mm?mm[0]:txt); }catch(e){}
+    if(!data){ status.textContent="Lecture impossible. Réessaie avec une image plus nette."; return; }
+    var n=0; MES_FIELDS.forEach(function(f){ var val=data[f.k]; if(val!=null && val!=="" && !isNaN(+val)){ inputs[f.k].value=+val; n++; } });
+    status.innerHTML = n? '<span style="color:var(--ok)">✓ '+n+' mesure(s) pré-remplie(s) — vérifie puis enregistre.</span>' : 'Aucune valeur lisible trouvée.';
+  }).catch(function(){ status.innerHTML='<span style="color:var(--orange)">Connexion impossible à l\'IA.</span>'; });
 }
 
 /* ---------- démarrage ---------- */
