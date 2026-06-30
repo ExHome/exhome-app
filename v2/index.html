@@ -135,7 +135,7 @@ var syncT;
 function setSync(msg){ var e=document.getElementById("sync"); if(!e) return; e.textContent=msg; e.style.display="block";
   clearTimeout(syncT); syncT=setTimeout(function(){ e.style.display="none"; }, 2600); }
 
-var APP_VERSION = "build 41 · 30 juin";
+var APP_VERSION = "build 42 · 30 juin";
 
 /* ---------- localStorage ---------- */
 function readLS(k){ try{ return JSON.parse(localStorage.getItem(k)); }catch(e){ return null; } }
@@ -289,11 +289,12 @@ function flushPending(){
   }));
 }
 /* ---- rafraîchissement automatique des écrans partagés ---- */
-var __view=null, __lastSig={};
+var __view=null, __lastSig={}, __chronoRunning=false;
 function setView(id, isSelf, run){ __view={ id:id, isSelf:isSelf, run:run }; }
 function viewSig(c){ return [c._mtime||0,(c.mesures||[]).length,(c.sante||[]).length,((c.chrono||{}).sessions||[]).length,(c.joursReussis||[]).length].join("|"); }
 function autoRefresh(){
   if(typeof document!=="undefined" && document.hidden) return;
+  if(__chronoRunning){ flushPending(); return; }
   var ae=document.activeElement; if(ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)){ flushPending(); return; }
   flushPending();
   var v=__view; if(!v) return;
@@ -522,6 +523,7 @@ function openClient(id, isSelf){
       +(nb?'<div class="muted" style="font-size:12px;margin-top:9px">Prochaine : '+nb.n+' à '+nb.min+' jours ('+(nb.min-jours)+' restants)</div>':'<div class="muted" style="font-size:12px;margin-top:9px">Ceinture maximale atteinte 🎉</div>');
     head.style.cursor="pointer"; head.onclick=function(){ screenProgression(c,isSelf); };
     app.appendChild(head);
+    app.appendChild(homeChrono(c, isSelf));
     app.appendChild(homeErgo(c, isSelf));
     var _po=poCard(c, isSelf); if(_po) app.appendChild(_po);
     app.appendChild(mesuresEncart(c, isSelf));
@@ -2201,6 +2203,46 @@ function scienceCard(onMore){
     +'<div style="font-size:13px;line-height:1.55">En suivant le protocole avec régularité — squat, fente, hinge, mouvement au quotidien — tu agis concrètement sur ta santé. C\'est ce que montrent les recherches sur le NEAT (Levine), l\'activité régulière (OMS) et la formation des habitudes sur environ 66 jours (Lally, UCL). La constance transforme durablement ton bien-être.</div></div></div>';
   var b=el("button","btn line block","Découvrir les fondements scientifiques"); b.style.marginTop="12px"; b.onclick=onMore; c.appendChild(b);
   return c;
+}
+
+function homeChrono(c, isSelf){
+  c.chrono=c.chrono||{sessions:[]};
+  var card=el("div","card"); card.style.cssText="background:linear-gradient(135deg,var(--card),var(--surf));border-color:rgba(201,168,76,.35)";
+  var head=el("div","row"); head.style.justifyContent="space-between";
+  head.innerHTML='<div class="eyebrow" style="color:var(--gold)">⏱ Temps ergo optimisé</div>';
+  var todayTot=el("div","muted"); todayTot.style.fontSize="11px";
+  function todaySec(){ return ((c.chrono.sessions||[]).filter(function(s){return !s.del && s.date===today();}).reduce(function(a,s){return a+(s.sec||0);},0)); }
+  function setToday(){ todayTot.textContent="Aujourd'hui : "+fmtChrono(todaySec()); }
+  setToday(); head.appendChild(todayTot); card.appendChild(head);
+  var sub=el("div","muted"); sub.style.cssText="font-size:12px;line-height:1.45;margin:4px 0 10px"; sub.textContent="Lance-le quand tu transformes le ménage en mouvement (vaisselle, repassage, sol…)."; card.appendChild(sub);
+
+  var disp=el("div"); disp.style.cssText="font-family:monospace;font-size:34px;font-weight:900;letter-spacing:.04em;color:var(--gold);text-align:center;margin:2px 0 10px"; disp.textContent=fmtChrono(0); card.appendChild(disp);
+
+  var running=false, startTs=0, base=0, tick=null;
+  function cur(){ return base + (running? Math.floor((Date.now()-startTs)/1000):0); }
+  function paint(){ disp.textContent=fmtChrono(cur()); }
+  function stopTick(){ if(tick){ clearInterval(tick); tick=null; } }
+  __stopTimers=function(){ stopTick(); __chronoRunning=false; };
+
+  var row=el("div"); row.style.cssText="display:flex;gap:8px";
+  var startBtn=el("button","btn primary","▶ Démarrer"); startBtn.style.flex="1";
+  var saveBtn=el("button","btn line","💾 Enregistrer"); saveBtn.style.flex="1";
+  row.appendChild(startBtn); row.appendChild(saveBtn); card.appendChild(row);
+
+  startBtn.onclick=function(){
+    if(running){ base=cur(); running=false; __chronoRunning=false; stopTick(); startBtn.textContent="▶ Reprendre"; disp.style.color="var(--gold)"; }
+    else { running=true; __chronoRunning=true; startTs=Date.now(); tick=setInterval(paint,500); startBtn.textContent="⏸ Pause"; disp.style.color="var(--ok)"; }
+  };
+  saveBtn.onclick=function(){
+    var total=cur(); running=false; __chronoRunning=false; stopTick();
+    if(total<3){ base=0; paint(); startBtn.textContent="▶ Démarrer"; disp.style.color="var(--gold)"; toast("Trop court pour enregistrer."); return; }
+    var s={ id:genId(), date:today(), sec:total, _ts:Date.now() }; c.chrono.sessions=(c.chrono.sessions||[]).concat([s]);
+    saveBtn.disabled=true; startBtn.disabled=true; saveBtn.textContent="Enregistrement…";
+    saveClient(c).then(function(m){ Object.assign(c,m); base=0; running=false; paint(); saveBtn.disabled=false; startBtn.disabled=false; saveBtn.textContent="💾 Enregistrer"; startBtn.textContent="▶ Démarrer"; disp.style.color="var(--gold)"; setToday(); toast("Session enregistrée : "+fmtChrono(total)); });
+  };
+
+  var more=el("button","btn ghost block","Voir l'historique & la comparaison"); more.style.marginTop="10px"; more.onclick=function(){ screenChrono(c,isSelf); }; card.appendChild(more);
+  return card;
 }
 
 function homeErgo(c, isSelf){
