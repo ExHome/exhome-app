@@ -135,7 +135,7 @@ var syncT;
 function setSync(msg){ var e=document.getElementById("sync"); if(!e) return; e.textContent=msg; e.style.display="block";
   clearTimeout(syncT); syncT=setTimeout(function(){ e.style.display="none"; }, 2600); }
 
-var APP_VERSION = "build 6 · 30 juin";
+var APP_VERSION = "build 8 · 30 juin";
 
 /* ---------- localStorage ---------- */
 function readLS(k){ try{ return JSON.parse(localStorage.getItem(k)); }catch(e){ return null; } }
@@ -210,7 +210,7 @@ function emptyClient(nom){
   return { id:genId(), nom:nom||"", login:slugLogin(nom||"cliente"), pin:"1234",
     profil:{ age:"", taille:"", sexe:"", niveau:"" },
     objectifText:"", dateDebut:today(),
-    joursReussis:[], objectifs:[], mesures:[], sante:[], journal:[], ergo:{}, hydra:{}, cibles:{ basale:null },
+    joursReussis:[], objectifs:[], mesures:[], sante:[], journal:[], programme:[], seances:[], messages:[], ergo:{}, hydra:{}, cibles:{ basale:null },
     _mtime:0 };
 }
 function maxMerge(a,b){ a=a||{}; b=b||{}; var o={}; Object.keys(a).forEach(function(k){o[k]=a[k];}); Object.keys(b).forEach(function(k){ o[k]=Math.max(o[k]||0,b[k]||0); }); return o; }
@@ -230,6 +230,9 @@ function mergeClient(a, b){
   m.joursReussis = Array.from(new Set((a.joursReussis||[]).concat(b.joursReussis||[]))).sort();
   m.sante = unionBy((a.sante||[]).concat(b.sante||[]), function(x){ return x.id; });
   m.journal = unionBy((a.journal||[]).concat(b.journal||[]), function(x){ return x.id; });
+  m.programme = unionBy((a.programme||[]).concat(b.programme||[]), function(x){ return x.id; });
+  m.seances = unionBy((a.seances||[]).concat(b.seances||[]), function(x){ return x.id; });
+  m.messages = unionBy((a.messages||[]).concat(b.messages||[]), function(x){ return x.id; });
   m.ergo = maxMerge(a.ergo, b.ergo);
   m.hydra = maxMerge(a.hydra, b.hydra);
   m._mtime = Math.max(a._mtime||0, b._mtime||0);
@@ -306,7 +309,8 @@ function setSession(s){ session=s; writeLS("exhome_v2_session", s); }
 function logout(){ session=null; localStorage.removeItem("exhome_v2_session"); render(); }
 
 var app = document.getElementById("app");
-function clear(){ app.innerHTML=""; }
+var __stopCam=null;
+function clear(){ if(__stopCam){ try{__stopCam();}catch(e){} __stopCam=null; } app.innerHTML=""; }
 function toast(msg){ var t=document.createElement("div"); t.className="toast"; t.textContent=msg; document.body.appendChild(t);
   setTimeout(function(){ t.style.opacity="0"; t.style.transition="opacity .4s"; setTimeout(function(){ t.remove(); }, 400); }, 1700); }
 
@@ -481,11 +485,11 @@ function openClient(id, isSelf){
     appIcon("food","Nutrition", function(){ openFoodJournal(c, isSelf); });
     appIcon("apple","Bibliothèque", function(){ openFoodLib(function(){ openClient(c.id,isSelf); }, function(food){ qtyAdd(food, c, isSelf); }); });
     appIcon("dash","Tableau de bord", function(){ openDashboard(c, isSelf); });
-    appIcon("list","Programme", soon("Programme"));
-    appIcon("calendar","Séances", soon("Séances"));
-    appIcon("chat","Messages", soon("Messages"));
-    appIcon("posture","Coach posture", soon("Coach posture"));
-    appIcon("camera","Scan balance", soon("Scan balance"));
+    appIcon("list","Programme", function(){ openProgramme(c, isSelf); });
+    appIcon("calendar","Séances", function(){ openSeances(c, isSelf); });
+    appIcon("chat","Messages", function(){ openMessages(c, isSelf); });
+    appIcon("posture","Coach posture", function(){ openPosture(c, isSelf); });
+    appIcon("camera","Scan balance", function(){ openScan(c, isSelf); });
     appIcon("user","Profil", function(){ screenProfil(c, isSelf); });
     app.appendChild(grid);
     var foot=el("div","center muted"); foot.style.cssText="margin-top:30px;font-size:11px;letter-spacing:.04em"; foot.textContent="Ex Home v2 · "+APP_VERSION; app.appendChild(foot);
@@ -1415,6 +1419,177 @@ function openDashboard(c, isSelf){
   var jr=(c.journal||[]).filter(function(e){return !e.del && e.date===today();}); var kc=0; jr.forEach(function(e){kc+=e.kcal||0;});
   var target=(c.cibles&&c.cibles.basale)||null;
   var nc=el("div","card"); nc.innerHTML='<div class="row" style="justify-content:space-between"><div class="eyebrow">Nutrition aujourd\'hui</div><div style="font-weight:800;color:var(--gold)">'+Math.round(kc)+(target?' / '+target:'')+' kcal</div></div>'; app.appendChild(nc);
+}
+
+/* ===================== Programme & Séances ===================== */
+function textarea(value, ph){ var t=document.createElement("textarea"); t.className="inp"; t.value=value||""; t.rows=4; t.style.resize="vertical"; if(ph) t.placeholder=ph; return t; }
+function isCoach(){ return session && session.role==="coach"; }
+
+function openProgramme(c, isSelf){
+  clear(); topbar("Programme", c.nom, function(){ openClient(c.id,isSelf); });
+  c.programme=c.programme||[];
+  app.appendChild(el("div","muted","Les gestes d'ergoptimisation définis avec ton coach."));
+  if(isCoach()){ var add=el("button","btn line block","+ Ajouter un exercice"); add.style.margin="14px 0"; add.onclick=function(){ exoForm(c,isSelf,null); }; app.appendChild(add); }
+  else { var sp=el("div"); sp.style.height="14px"; app.appendChild(sp); }
+  var list=(c.programme||[]).filter(function(x){return !x.del;});
+  if(!list.length){ app.appendChild(el("div","card center muted","Aucun exercice dans le programme pour l'instant.")); return; }
+  list.forEach(function(x){
+    var card=el("div","card");
+    var hdr=el("div","row"); hdr.style.justifyContent="space-between"; hdr.style.marginBottom=(x.desc?"6px":"0");
+    hdr.innerHTML='<div style="font-weight:700">'+esc(x.nom)+'</div>';
+    if(isCoach()){ var edit=el("button","back"); edit.textContent="Modifier"; edit.style.fontSize="12px"; edit.onclick=function(){ exoForm(c,isSelf,x); }; hdr.appendChild(edit); }
+    card.appendChild(hdr);
+    if(x.desc){ var d=el("div","muted"); d.style.cssText="font-size:13px;line-height:1.5;white-space:pre-wrap"; d.textContent=x.desc; card.appendChild(d); }
+    app.appendChild(card);
+  });
+}
+function exoForm(c, isSelf, existing){
+  clear(); topbar(existing?"Modifier l'exercice":"Nouvel exercice", c.nom, function(){ openProgramme(c,isSelf); });
+  var x=existing||{id:genId()};
+  var card=el("div","card");
+  var nom=input(x.nom,{placeholder:"Ex : Repasser le linge en gainage"});
+  var desc=textarea(x.desc,"Détails du geste, points d'attention posturaux, bénéfices…");
+  card.appendChild(field("Exercice / geste", nom));
+  card.appendChild(field("Description", desc));
+  var save=el("button","btn primary block","Enregistrer"); card.appendChild(save); app.appendChild(card);
+  save.onclick=function(){ var n=(nom.value||"").trim(); if(!n){toast("Indique un nom.");return;} x.nom=n; x.desc=desc.value; x._ts=Date.now(); x.del=false;
+    if(!existing) c.programme=(c.programme||[]).concat([x]); else c.programme=(c.programme||[]).map(function(y){return y.id===x.id?x:y;});
+    save.disabled=true; save.textContent="Enregistrement…"; saveClient(c).then(function(m){Object.assign(c,m); toast("Enregistré"); openProgramme(c,isSelf);}); };
+  if(existing){ var del=el("button","btn danger block","Supprimer cet exercice"); del.style.marginTop="10px"; del.onclick=function(){ var y=(c.programme||[]).filter(function(z){return z.id===x.id;})[0]; if(y){y.del=true;y._ts=Date.now();} saveClient(c).then(function(m){Object.assign(c,m); toast("Supprimé"); openProgramme(c,isSelf);}); }; app.appendChild(del); }
+}
+
+function openSeances(c, isSelf){
+  clear(); topbar("Séances", c.nom, function(){ openClient(c.id,isSelf); });
+  c.seances=c.seances||[];
+  if(isCoach()){ var add=el("button","btn line block","+ Planifier une séance"); add.style.marginBottom="14px"; add.onclick=function(){ seanceForm(c,isSelf,null); }; app.appendChild(add); }
+  var list=(c.seances||[]).filter(function(x){return !x.del;}).sort(function(a,b){return (a.date||"").localeCompare(b.date||"");});
+  if(!list.length){ app.appendChild(el("div","card center muted","Aucune séance planifiée.")); return; }
+  var t=today();
+  list.forEach(function(x){
+    var past=(x.date||"")<t; var card=el("div","card"); if(past&&!x.done) card.style.opacity=".7";
+    var hdr=el("div","row"); hdr.style.justifyContent="space-between";
+    hdr.innerHTML='<div><div style="font-weight:700">'+esc(x.titre||"Séance")+'</div><div class="muted" style="font-size:12px;margin-top:2px">'+fmtDate(x.date)+'</div></div>';
+    var chk=el("button","back"); chk.textContent=x.done?"✓ Fait":"Marquer fait"; chk.style.cssText="font-size:12px;"+(x.done?"color:var(--ok);border-color:var(--ok)":"");
+    chk.onclick=function(){ x.done=!x.done; x._ts=Date.now(); saveClient(c).then(function(m){Object.assign(c,m); openSeances(c,isSelf);}); };
+    hdr.appendChild(chk); card.appendChild(hdr);
+    if(x.notes){ var n=el("div","muted"); n.style.cssText="font-size:13px;line-height:1.5;white-space:pre-wrap;margin-top:8px"; n.textContent=x.notes; card.appendChild(n); }
+    if(isCoach()){ var edit=el("button","back"); edit.textContent="Modifier"; edit.style.cssText="font-size:12px;margin-top:10px"; edit.onclick=function(){ seanceForm(c,isSelf,x); }; card.appendChild(edit); }
+    app.appendChild(card);
+  });
+}
+function seanceForm(c, isSelf, existing){
+  clear(); topbar(existing?"Modifier la séance":"Planifier une séance", c.nom, function(){ openSeances(c,isSelf); });
+  var x=existing||{id:genId(),date:today()};
+  var card=el("div","card");
+  var date=input((x.date||today()).slice(0,10),{type:"date"});
+  var titre=input(x.titre,{placeholder:"Ex : Mobilité & gainage"});
+  var notes=textarea(x.notes,"Exercices, durée, consignes…");
+  card.appendChild(field("Date", date));
+  card.appendChild(field("Titre", titre));
+  card.appendChild(field("Contenu / notes", notes));
+  var save=el("button","btn primary block","Enregistrer"); card.appendChild(save); app.appendChild(card);
+  save.onclick=function(){ x.date=date.value||today(); x.titre=(titre.value||"").trim()||"Séance"; x.notes=notes.value; x._ts=Date.now(); x.del=false;
+    if(!existing) c.seances=(c.seances||[]).concat([x]); else c.seances=(c.seances||[]).map(function(y){return y.id===x.id?x:y;});
+    save.disabled=true; save.textContent="Enregistrement…"; saveClient(c).then(function(m){Object.assign(c,m); toast("Séance enregistrée"); openSeances(c,isSelf);}); };
+  if(existing){ var del=el("button","btn danger block","Supprimer cette séance"); del.style.marginTop="10px"; del.onclick=function(){ var y=(c.seances||[]).filter(function(z){return z.id===x.id;})[0]; if(y){y.del=true;y._ts=Date.now();} saveClient(c).then(function(m){Object.assign(c,m); toast("Supprimée"); openSeances(c,isSelf);}); }; app.appendChild(del); }
+}
+
+/* ===================== Messages ===================== */
+function openMessages(c, isSelf){
+  clear(); topbar("Messages", c.nom, function(){ openClient(c.id,isSelf); });
+  c.messages=c.messages||[];
+  var thread=el("div"); thread.style.cssText="margin-bottom:14px";
+  function paint(){
+    thread.innerHTML="";
+    var msgs=(c.messages||[]).filter(function(m){return !m.del;}).sort(function(a,b){return (a.ts||0)-(b.ts||0);});
+    if(!msgs.length){ thread.appendChild(el("div","card center muted","Lance la conversation !")); return; }
+    msgs.forEach(function(m){
+      var mine=m.from===session.role;
+      var row=el("div"); row.style.cssText="display:flex;margin-bottom:8px;"+(mine?"justify-content:flex-end":"justify-content:flex-start");
+      var b=el("div"); b.style.cssText="max-width:78%;padding:10px 13px;border-radius:14px;font-size:14px;line-height:1.4;"+(mine?"background:var(--gold);color:#1a1607;border-bottom-right-radius:4px":"background:var(--surf);color:var(--text);border:1px solid var(--border);border-bottom-left-radius:4px");
+      b.textContent=m.text; row.appendChild(b); thread.appendChild(row);
+    });
+  }
+  paint(); app.appendChild(thread);
+  var bar=el("div","row");
+  var inp=input("",{placeholder:"Ton message…"}); inp.style.flex="1"; inp.style.minWidth="0";
+  var send=el("button","btn primary","Envoyer");
+  bar.appendChild(inp); bar.appendChild(send); app.appendChild(bar);
+  function go(){ var t=(inp.value||"").trim(); if(!t) return; c.messages=(c.messages||[]).concat([{id:genId(),from:session.role,text:t,ts:Date.now(),_ts:Date.now()}]); inp.value=""; saveClient(c).then(function(m){Object.assign(c,m); paint(); window.scrollTo(0,document.body.scrollHeight);}); }
+  send.onclick=go; inp.addEventListener("keydown",function(e){ if(e.key==="Enter") go(); });
+}
+
+/* ===================== Coach posture (sur l'appareil) ===================== */
+var TF_URL="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js";
+var POSE_URL="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection@2.1.3/dist/pose-detection.min.js";
+var poseDetector=null;
+function ensurePose(){ if(poseDetector) return Promise.resolve(poseDetector); return loadScriptOnce(TF_URL).then(function(){return loadScriptOnce(POSE_URL);}).then(function(){ return window.poseDetection.createDetector(window.poseDetection.SupportedModels.MoveNet,{modelType:window.poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING}); }).then(function(d){poseDetector=d;return d;}); }
+var POSE_EDGES=[["left_shoulder","right_shoulder"],["left_shoulder","left_elbow"],["left_elbow","left_wrist"],["right_shoulder","right_elbow"],["right_elbow","right_wrist"],["left_shoulder","left_hip"],["right_shoulder","right_hip"],["left_hip","right_hip"],["left_hip","left_knee"],["left_knee","left_ankle"],["right_hip","right_knee"],["right_knee","right_ankle"]];
+function kpMap(p){ var m={}; (p.keypoints||[]).forEach(function(k){m[k.name]=k;}); return m; }
+function gkp(k){ return k && k.score>0.3; }
+function angP(a,b,c){ if(!a||!b||!c)return null; var v1=[a.x-b.x,a.y-b.y],v2=[c.x-b.x,c.y-b.y]; var d=v1[0]*v2[0]+v1[1]*v2[1]; var m1=Math.hypot(v1[0],v1[1]),m2=Math.hypot(v2[0],v2[1]); if(!m1||!m2)return null; return Math.acos(Math.max(-1,Math.min(1,d/(m1*m2))))*180/Math.PI; }
+function vleanP(p1,p2){ if(!p1||!p2)return null; return Math.abs(Math.atan2(p2.x-p1.x,p2.y-p1.y))*180/Math.PI; }
+function bestSide(m){ function sc(s){var a=m[s+"_shoulder"],b=m[s+"_hip"],c=m[s+"_knee"],d=m[s+"_ankle"];return (a?a.score:0)+(b?b.score:0)+(c?c.score:0)+(d?d.score:0);} return sc("left")>=sc("right")?"left":"right"; }
+function analyzePosture(pose,ex){
+  var m=kpMap(pose),s=bestSide(m); var sh=m[s+"_shoulder"],hip=m[s+"_hip"],knee=m[s+"_knee"],ank=m[s+"_ankle"],ear=m[s+"_ear"]; var fb=[];
+  function add(ok,txt){fb.push({ok:ok,txt:txt});}
+  if(ex==="debout"){ if(!gkp(sh)||!gkp(hip))return[{ok:false,txt:"Personne mal détectée — mets-toi de profil, en pied, bien éclairée."}]; var lean=vleanP(sh,hip); add(lean!=null&&lean<10, lean!=null&&lean<10?"Dos vertical, bien aligné ✓":"Redresse le buste, garde le dos vertical."); if(gkp(ear)){var head=vleanP(ear,sh); add(head!=null&&head<18, head!=null&&head<18?"Tête bien alignée ✓":"Rentre légèrement le menton, tête trop en avant.");} return fb; }
+  if(!gkp(hip)||!gkp(knee)||!gkp(ank))return[{ok:false,txt:"Personne mal détectée — mets-toi de profil, en pied, bien éclairée."}];
+  var kneeA=angP(hip,knee,ank); var back=gkp(sh)?vleanP(sh,hip):null;
+  if(ex==="hinge"){ add(kneeA!=null&&kneeA>150, kneeA!=null&&kneeA>150?"Genoux peu fléchis (hinge) ✓":"Fléchis moins les genoux : c'est un mouvement de hanche."); if(back!=null)add(true,"Bascule du bassin : garde le dos plat tout du long."); return fb; }
+  if(kneeA!=null){ if(kneeA<100)add(true,"Belle profondeur ✓"); else if(kneeA<130)add(false,"Descends un peu plus (cuisses vers l'horizontale)."); else add(false,"Fléchis davantage les genoux."); }
+  if(back!=null)add(back<45, back<45?"Dos bien gainé ✓":"Garde le dos plus droit, regarde devant toi."); return fb;
+}
+function drawSkeleton(ctx,pose,sx,sy){ var m=kpMap(pose); ctx.lineWidth=3; ctx.strokeStyle="#E0BC5E"; POSE_EDGES.forEach(function(e){var a=m[e[0]],b=m[e[1]]; if(gkp(a)&&gkp(b)){ctx.beginPath();ctx.moveTo(a.x*sx,a.y*sy);ctx.lineTo(b.x*sx,b.y*sy);ctx.stroke();}}); (pose.keypoints||[]).forEach(function(k){if(gkp(k)){ctx.beginPath();ctx.arc(k.x*sx,k.y*sy,4,0,6.3);ctx.fillStyle="#E0852E";ctx.fill();}}); }
+function renderPostureFb(host,fb){ host.innerHTML=""; fb.forEach(function(f){ var r=el("div"); r.style.cssText="display:flex;gap:9px;align-items:flex-start;background:var(--surf);border:1px solid var(--border);border-radius:11px;padding:11px 12px;margin-bottom:8px;font-size:13px;color:var(--text)"; r.innerHTML='<span style="font-size:15px;flex-shrink:0">'+(f.ok?"✅":"⚠️")+'</span><span style="line-height:1.45">'+esc(f.txt)+'</span>'; host.appendChild(r); }); }
+function openPosture(c, isSelf){
+  clear(); topbar("Coach posture", c.nom, function(){ openClient(c.id,isSelf); });
+  app.appendChild(el("div","muted","Analyse sur l'appareil (rien n'est envoyé en ligne). Mets-toi de profil, en pied, bien éclairée. Conseils indicatifs — pas un avis médical."));
+  var ex="squat";
+  var exRow=el("div"); exRow.style.cssText="display:flex;flex-wrap:wrap;gap:7px;margin:14px 0 12px";
+  [["squat","Squat"],["fente","Fente"],["hinge","Hinge"],["debout","Debout"]].forEach(function(e){ var b=el("button"); b.textContent=e[1]; function st(){var on=ex===e[0]; b.style.cssText="padding:8px 13px;border-radius:9px;border:"+(on?"1.5px solid var(--gold)":"1px solid var(--border)")+";background:"+(on?"var(--gold)":"transparent")+";color:"+(on?"#1a1607":"var(--text)")+";font-size:12px;font-weight:"+(on?700:500)+";cursor:pointer;font-family:inherit";} st(); b.__st=st; b.onclick=function(){ex=e[0]; Array.prototype.forEach.call(exRow.children,function(x){x.__st&&x.__st();});}; exRow.appendChild(b); });
+  app.appendChild(exRow);
+  var modeRow=el("div","row"); modeRow.style.marginBottom="12px";
+  var fileIn=document.createElement("input"); fileIn.type="file"; fileIn.accept="image/*"; fileIn.style.display="none"; app.appendChild(fileIn);
+  var bPhoto=el("button","btn line","🖼️ Analyser une photo"); bPhoto.style.flex="1";
+  var bLive=el("button","btn ghost","🎥 Caméra"); bLive.style.flex="1";
+  modeRow.appendChild(bPhoto); modeRow.appendChild(bLive); app.appendChild(modeRow);
+  var flip=el("button","btn ghost block","🔄 Retourner la caméra"); flip.style.cssText+=";display:none;margin-bottom:10px"; app.appendChild(flip);
+  var status=el("div","muted"); status.style.cssText="font-size:12px;margin-bottom:10px"; app.appendChild(status);
+  var canvas=document.createElement("canvas"); canvas.style.cssText="width:100%;border-radius:12px;border:1px solid var(--border);display:none;margin-bottom:12px"; app.appendChild(canvas);
+  var fbEl=el("div"); app.appendChild(fbEl);
+  var live={on:false,stream:null,raf:0,video:null,last:0,facing:"environment",det:null};
+  function stopTracks(){ if(live.raf){cancelAnimationFrame(live.raf);live.raf=0;} if(live.stream){live.stream.getTracks().forEach(function(t){t.stop();});live.stream=null;} }
+  function stopLive(){ live.on=false; stopTracks(); flip.style.display="none"; bLive.textContent="🎥 Caméra"; }
+  __stopCam=stopLive;
+  bPhoto.onclick=function(){ stopLive(); fileIn.click(); };
+  fileIn.onchange=function(){ var file=this.files[0]; if(!file)return; status.textContent="Chargement du modèle…"; var img=new Image(); img.onload=function(){ var W=Math.min(360,img.naturalWidth||360),H=(img.naturalHeight||480)*W/(img.naturalWidth||360); canvas.width=W; canvas.height=H; canvas.style.display="block"; var ctx=canvas.getContext("2d"); ctx.drawImage(img,0,0,W,H); ensurePose().then(function(det){status.textContent="Analyse…"; return det.estimatePoses(canvas);}).then(function(poses){ if(!poses||!poses.length){status.textContent="Aucune personne détectée. Recadre en pied, de profil."; fbEl.innerHTML=""; return;} ctx.drawImage(img,0,0,W,H); drawSkeleton(ctx,poses[0],1,1); status.textContent="✓ Analyse terminée"; renderPostureFb(fbEl,analyzePosture(poses[0],ex)); }).catch(function(){ status.innerHTML='<span style="color:var(--danger)">Modèle indisponible (connexion requise au 1er chargement).</span>'; }); }; img.src=URL.createObjectURL(file); };
+  function startCamera(){ status.textContent="Démarrage caméra…"; return navigator.mediaDevices.getUserMedia({video:{facingMode:live.facing}}).then(function(stream){ live.stream=stream; live.on=true; bLive.textContent="⏹ Arrêter"; flip.style.display="block"; var v=document.createElement("video"); v.playsInline=true; v.muted=true; v.srcObject=stream; live.video=v; v.onloadedmetadata=function(){ v.play(); canvas.style.display="block"; var vw=v.videoWidth||480,vh=v.videoHeight||640,W=Math.min(360,vw),H=vh*W/vw; canvas.width=W; canvas.height=H; var ctx=canvas.getContext("2d"); status.textContent="En direct"; if(live.raf)cancelAnimationFrame(live.raf); function loop(ts){ if(!live.on||!document.body.contains(canvas)){stopLive();return;} live.raf=requestAnimationFrame(loop); if(ts-live.last<140)return; live.last=ts; live.det.estimatePoses(v).then(function(poses){ if(!live.on)return; ctx.drawImage(v,0,0,W,H); if(poses&&poses.length){drawSkeleton(ctx,poses[0],W/vw,H/vh); renderPostureFb(fbEl,analyzePosture(poses[0],ex));} }).catch(function(){}); } live.raf=requestAnimationFrame(loop); }; }); }
+  bLive.onclick=function(){ if(live.on){stopLive(); status.textContent=""; return;} status.textContent="Démarrage caméra + modèle…"; ensurePose().then(function(det){live.det=det; return startCamera();}).catch(function(){ status.innerHTML='<span style="color:var(--danger)">Caméra ou modèle indisponible (autorise la caméra, connexion requise au 1er chargement).</span>'; }); };
+  flip.onclick=function(){ if(!live.on)return; live.facing=live.facing==="environment"?"user":"environment"; stopTracks(); startCamera().catch(function(){ status.innerHTML='<span style="color:var(--danger)">Impossible de basculer la caméra.</span>'; }); };
+}
+
+/* ===================== Scan balance (saisie des données balance) ===================== */
+var SCALE_FIELDS=[
+  {k:"poids",lab:"Poids",u:"kg"},{k:"graisse",lab:"Masse grasse",u:"%"},{k:"muscle",lab:"Masse musculaire",u:"%"},
+  {k:"eau",lab:"Eau",u:"%"},{k:"imc",lab:"IMC",u:""},{k:"osseuse",lab:"Masse osseuse",u:"kg"},
+  {k:"metabolisme",lab:"Métabolisme",u:"kcal"},{k:"viscerale",lab:"Graisse viscérale",u:""}
+];
+function openScan(c, isSelf){
+  clear(); topbar("Scan balance", c.nom, function(){ openClient(c.id,isSelf); });
+  app.appendChild(el("div","muted","Prends une photo de ta balance (ou de son appli) comme repère, puis reporte les valeurs. Tout est enregistré dans tes mesures."));
+  var fileIn=document.createElement("input"); fileIn.type="file"; fileIn.accept="image/*"; fileIn.style.display="none"; app.appendChild(fileIn);
+  var photoBtn=el("button","btn line block","📷 Photo de la balance (repère)"); photoBtn.style.margin="14px 0 10px"; app.appendChild(photoBtn);
+  var preview=document.createElement("img"); preview.style.cssText="width:100%;border-radius:12px;border:1px solid var(--border);display:none;margin-bottom:12px"; app.appendChild(preview);
+  photoBtn.onclick=function(){ fileIn.click(); };
+  fileIn.onchange=function(){ var f=this.files[0]; if(!f)return; preview.src=URL.createObjectURL(f); preview.style.display="block"; };
+  var card=el("div","card");
+  var dateIn=input(today(),{type:"date"}); card.appendChild(field("Date", dateIn));
+  var grid=el("div","two"); var inputs={};
+  SCALE_FIELDS.forEach(function(f){ var i=input("",{type:"number",inputmode:"decimal",placeholder:f.u||""}); inputs[f.k]=i; grid.appendChild(field(f.lab+(f.u?" ("+f.u+")":""), i)); });
+  card.appendChild(grid); app.appendChild(card);
+  var save=el("button","btn primary block","Enregistrer dans mes mesures"); app.appendChild(save);
+  save.onclick=function(){ var any=false; var m={id:genId(),date:dateIn.value||today(),source:"balance",_ts:Date.now()}; SCALE_FIELDS.forEach(function(f){ var v=num(inputs[f.k].value); if(v!=null){m[f.k]=v; any=true;} }); if(!any){toast("Renseigne au moins une valeur.");return;} c.mesures=(c.mesures||[]).concat([m]); save.disabled=true; save.textContent="Enregistrement…"; saveClient(c).then(function(mc){Object.assign(c,mc); toast("Mesure enregistrée"); openClient(c.id,isSelf);}); };
 }
 
 /* ---------- démarrage ---------- */
