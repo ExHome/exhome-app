@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ex Home</title>
+<meta name="theme-color" content="#0F2820">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Ex Home">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' rx='40' fill='%230F2820'/%3E%3Cpath d='M52 120V60h44M52 90h34M52 120h44' stroke='%23C9A84C' stroke-width='9' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3Cpath d='M118 60v60M118 60l16 14M118 120l16-14' stroke='%23E0852E' stroke-width='9' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E">
+<link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22Ex%20Home%22%2C%22short_name%22%3A%22Ex%20Home%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%230F2820%22%2C%22theme_color%22%3A%22%230F2820%22%7D">
+<style>
+  :root{
+    --bg:#0F2820; --surf:#163428; --card:#1B4D3E; --gold:#C9A84C; --text:#F5F0E8;
+    --dim:#7FA88B; --border:#1E4A38; --ok:#6FCF97; --orange:#E0852E; --danger:#E07060;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;}
+  body{min-height:100vh;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);background:radial-gradient(125% 80% at 50% 16%, #18402F 0%, #0F2820 44%, #07140D 100%) fixed;}
+  #app{max-width:680px;margin:0 auto;padding:18px 16px 64px;}
+  h1,h2,h3{margin:0;font-weight:800;letter-spacing:-.01em}
+  button{font-family:inherit}
+  button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+  input,select{font-family:inherit}
+  .muted{color:var(--dim)}
+  .row{display:flex;gap:10px;align-items:center}
+  .wrap{display:flex;flex-wrap:wrap;gap:10px}
+  .spacer{flex:1}
+  /* top bar */
+  .top{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+  .back{background:var(--surf);border:1px solid var(--border);color:var(--text);
+    border-radius:11px;padding:9px 13px;font-size:14px;cursor:pointer}
+  .top h2{font-size:19px}
+  .eyebrow{font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--gold);font-weight:800}
+  /* card */
+  .card{background:linear-gradient(160deg,#173B2D,#102A20);border:1px solid rgba(201,168,76,.18);border-radius:22px;padding:18px;margin-bottom:14px;box-shadow:0 10px 30px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.04)}
+  .card.flat{background:var(--surf)}
+  /* tiles */
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+  @media(min-width:520px){.grid{grid-template-columns:repeat(3,1fr)}}
+  .tile{position:relative;border:1px solid var(--border);border-radius:18px;cursor:pointer;
+    padding:18px 14px;min-height:118px;display:flex;flex-direction:column;justify-content:space-between;
+    background:linear-gradient(155deg,#1B4D3E,#143A2D);transition:transform .12s ease,border-color .12s ease}
+  .tile:hover{transform:translateY(-2px);border-color:var(--gold)}
+  .tile:active{transform:translateY(0)}
+  .tile .ic{width:46px;height:46px;border-radius:13px;display:flex;align-items:center;justify-content:center;
+    background:linear-gradient(150deg,#0F2A1E,#0A1A12);border:1px solid var(--gold)}
+  .tile .ic svg{width:25px;height:25px}
+  .tile .lab{font-size:14px;font-weight:700;line-height:1.25}
+  .tile .sub{font-size:11px;color:var(--dim);margin-top:2px}
+  /* accueil — tuiles premium (identiques au launcher) */
+  .exh-tile{transition:transform .12s ease,box-shadow .12s ease,border-color .12s ease}
+  .exh-tile:hover{transform:translateY(-2px);border-color:rgba(201,168,76,.55)!important;box-shadow:0 7px 20px rgba(0,0,0,.45)!important}
+  .exh-tile:active{transform:scale(.96)}
+  /* buttons */
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;
+    border-radius:12px;padding:12px 16px;font-size:14px;font-weight:700;cursor:pointer;border:none}
+  .btn.primary{background:linear-gradient(180deg,#F4DE9C 0%,#DCBB60 52%,#C9A84C 100%);color:#1a1607;text-transform:uppercase;letter-spacing:.05em;box-shadow:0 6px 22px rgba(201,168,76,.34), inset 0 1px 0 rgba(255,255,255,.45)}
+  .btn.ghost{background:var(--surf);color:var(--text);border:1px solid var(--border)}
+  .btn.line{background:transparent;color:var(--gold);border:1px solid var(--gold)}
+  .btn.danger{background:transparent;color:var(--danger);border:1px solid var(--danger)}
+  .btn.block{width:100%}
+  .btn:active{filter:brightness(.94)}
+  /* form */
+  label.f{display:block;font-size:11px;color:var(--gold);text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin:0 0 6px 2px}
+  .inp{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:11px;
+    padding:12px;color:var(--text);font-size:15px}
+  .field{margin-bottom:13px}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+  /* list rows */
+  .line{display:flex;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid var(--border)}
+  .line:last-child{border-bottom:none}
+  .line .k{color:var(--dim);font-size:13px}
+  .line .v{font-size:14px;font-weight:600;text-align:right}
+  /* belt chip */
+  .belt{display:inline-flex;align-items:center;gap:8px;background:var(--surf);
+    border:1px solid var(--border);border-radius:999px;padding:6px 13px;font-size:13px;font-weight:700}
+  .dot{width:13px;height:13px;border-radius:50%;border:1px solid rgba(0,0,0,.35)}
+  /* misc */
+  .title-xl{font-size:26px;line-height:1.1}
+  .center{text-align:center}
+  .pill{display:inline-block;font-size:11px;font-weight:700;border-radius:999px;padding:3px 9px;
+    background:var(--surf);border:1px solid var(--border);color:var(--dim)}
+  .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:var(--card);
+    border:1px solid var(--gold);color:var(--text);padding:11px 18px;border-radius:12px;font-size:13px;
+    z-index:99;box-shadow:0 8px 24px rgba(0,0,0,.4);max-width:90%}
+  .sync{position:fixed;top:calc(env(safe-area-inset-top) + 10px);right:12px;font-size:11px;color:var(--dim);
+    background:var(--surf);border:1px solid var(--border);border-radius:999px;padding:4px 10px;z-index:50}
+  @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+  ::placeholder{color:#557}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <linearGradient id="exhGold" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#F8EBC2"/><stop offset="40%" stop-color="#E0C272"/><stop offset="72%" stop-color="#C9A84C"/><stop offset="100%" stop-color="#9A7327"/></linearGradient>
+  <linearGradient id="exhOrange" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#F6B468"/><stop offset="100%" stop-color="#D9742A"/></linearGradient>
+</defs></svg>
+<div id="app"></div>
+<div id="sync" class="sync" style="display:none"></div>
+
+<script>
+"use strict";
+/* ============================================================================
+   EX HOME v2 — application propre, sans compilation, un seul fichier.
+   Principe : UNE fiche par cliente, UN seul endroit pour les mesures.
+   Synchro : fusion (jamais d'écrasement), donc aucune perte de données.
+   Backend : Supabase (table exhome_client_data), clés préfixées "v2:" pour
+   ne JAMAIS toucher aux données de l'ancienne app.
+============================================================================ */
+
+/* ---------- Supabase ---------- */
+var SB_URL = "https://tsvsoormwryatcouztrb.supabase.co";
+var SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRzdnNvb3Jtd3J5YXRjb3V6dHJiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI0NzEwMzMsImV4cCI6MjA5ODA0NzAzM30.IoquMyBUZE6QrEQdIJGgHF80QukJdG_Rqucfkvm0iy4";
+var REST = SB_URL + "/rest/v1/exhome_client_data";
+var HJSON = { apikey: SB_KEY, Authorization: "Bearer " + SB_KEY, "Content-Type": "application/json" };
+
+function cloudGet(key){
+  return fetch(REST + "?client_id=eq." + encodeURIComponent(key) + "&select=payload", { headers: HJSON })
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(rows){ if(rows && rows[0]){ try{ return JSON.parse(rows[0].payload); }catch(e){ return null; } } return null; })
+    .catch(function(){ return null; });
+}
+function cloudPut(key, payload){
+  setSync("Enregistrement…");
+  return fetch(REST, { method:"POST",
+      headers: Object.assign({}, HJSON, { Prefer:"resolution=merge-duplicates,return=minimal" }),
+      body: JSON.stringify({ client_id: key, payload: JSON.stringify(payload), updated_at: new Date().toISOString() }) })
+    .then(function(){ setSync("Synchronisé ✓"); })
+    .catch(function(){ setSync("Hors-ligne — sauvegardé sur l'appareil"); });
+}
+var syncT;
+function setSync(msg){ var e=document.getElementById("sync"); if(!e) return; e.textContent=msg; e.style.display="block";
+  clearTimeout(syncT); syncT=setTimeout(function(){ e.style.display="none"; }, 2600); }
+
+/* ---------- localStorage ---------- */
+function readLS(k){ try{ return JSON.parse(localStorage.getItem(k)); }catch(e){ return null; } }
+function writeLS(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+
+/* ---------- utils ---------- */
+function today(){ var d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function genId(){ return Math.random().toString(36).slice(2,9); }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];}); }
+function num(v){ var n=parseFloat(v); return isNaN(n)?null:n; }
+function fmtDate(iso){ if(!iso) return ""; var p=String(iso).slice(0,10).split("-"); return p.length===3 ? p[2]+"/"+p[1]+"/"+p[0] : iso; }
+function slugLogin(nom){ return nom.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z ]/g,"").trim().split(/\s+/).join("."); }
+
+/* ---------- ceintures (progression) ---------- */
+var BELTS = [
+  { n:"Blanche", c:"#F5F0E8", min:0 },
+  { n:"Jaune",   c:"#E9D66B", min:7 },
+  { n:"Orange",  c:"#E0852E", min:21 },
+  { n:"Verte",   c:"#6FCF97", min:45 },
+  { n:"Bleue",   c:"#5B8DEF", min:90 },
+  { n:"Marron",  c:"#8B5A2B", min:150 },
+  { n:"Noire",   c:"#2A2A2A", min:250 }
+];
+function belt(jours){ var b=BELTS[0]; for(var i=0;i<BELTS.length;i++){ if(jours>=BELTS[i].min) b=BELTS[i]; } return b; }
+function nextBelt(jours){ for(var i=0;i<BELTS.length;i++){ if(jours<BELTS[i].min) return BELTS[i]; } return null; }
+
+/* ---------- icônes ---------- */
+var O = "url(#exhOrange)";
+var ICONS = {
+  compass:'<circle cx="12" cy="12" r="9"/><polygon points="15.5,8.5 11,11 8.5,15.5 13,13" fill="'+O+'" stroke="'+O+'"/>',
+  dash:'<rect x="3.5" y="12" width="4" height="8" rx="1"/><rect x="10" y="8" width="4" height="12" rx="1"/><rect x="16.5" y="4" width="4" height="16" rx="1" fill="'+O+'" stroke="'+O+'"/>',
+  user:'<circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/>',
+  posture:'<circle cx="12" cy="4.2" r="2"/><line x1="12" y1="6.2" x2="12" y2="13.5" stroke="'+O+'"/><line x1="12" y1="8.8" x2="8.5" y2="11.5"/><line x1="12" y1="8.8" x2="15.5" y2="11.5"/><line x1="12" y1="13.5" x2="9" y2="20"/><line x1="12" y1="13.5" x2="15" y2="20"/>',
+  list:'<rect x="5" y="3.5" width="14" height="17" rx="2"/><path d="M9.5 3.5V2.5h5v1"/><line x1="8.5" y1="10" x2="15.5" y2="10"/><line x1="8.5" y1="14" x2="13.5" y2="14"/>',
+  timer:'<circle cx="12" cy="13.5" r="7"/><line x1="12" y1="13.5" x2="12" y2="9.5"/><line x1="10" y1="3" x2="14" y2="3"/><line x1="12" y1="3" x2="12" y2="6.5"/>',
+  target:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="2" fill="'+O+'" stroke="'+O+'"/>',
+  chart:'<path d="M4 4v16h16"/><polyline points="6,16 10,12 13,14.5 20,7"/><circle cx="20" cy="7" r="2" fill="'+O+'" stroke="'+O+'"/>',
+  camera:'<rect x="3" y="7" width="18" height="13" rx="2.5"/><circle cx="12" cy="13.5" r="3.5"/><path d="M8.5 7l1.2-2.2h4.6L15.5 7"/>',
+  heart:'<path d="M12 20s-7-4.3-7-9.3a3.8 3.8 0 0 1 7-2.2 3.8 3.8 0 0 1 7 2.2C19 15.7 12 20 12 20z" fill="'+O+'" fill-opacity="0.42"/>',
+  food:'<line x1="8" y1="7" x2="8" y2="21"/><path d="M6 3v3.8M10 3v3.8M6 6.8c0 1.1.9 2 2 2s2-.9 2-2"/><path d="M16.5 3c-1.4 0-2.2 1.7-2.2 4.2s.8 3.4 2.2 3.4v10.4"/>',
+  apple:'<path d="M12 8c-2-1.8-5-1.3-6 1-1.2 2.7 0 7 2 9 1 1 2 1.2 4 1.2s3-.2 4-1.2c2-2 3.2-6.3 2-9-1-2.3-4-2.8-6-1z"/><path d="M12 8c.2-2 1.5-3.2 3.3-3.4" stroke="'+O+'"/>',
+  doc:'<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8.5 12.5l2.2 2.2 4-4.2" stroke="'+O+'"/>',
+  drop:'<path d="M12 3.2s6 6.3 6 10.3a6 6 0 0 1-12 0C6 9.5 12 3.2 12 3.2z"/><path d="M9.3 14.2a2.7 2.7 0 0 0 2.7 2.7" stroke="'+O+'"/>',
+  calendar:'<rect x="4" y="5" width="16" height="16" rx="2.5"/><line x1="4" y1="9.5" x2="20" y2="9.5"/><line x1="9" y1="3" x2="9" y2="6"/><line x1="15" y1="3" x2="15" y2="6"/><circle cx="12" cy="14.5" r="1.9" fill="'+O+'" stroke="'+O+'"/>',
+  chat:'<path d="M5 5.5h14a1.5 1.5 0 0 1 1.5 1.5v8a1.5 1.5 0 0 1-1.5 1.5H10l-4.5 4V7a1.5 1.5 0 0 1 1.5-1.5z"/>',
+  search:'<circle cx="11" cy="11" r="6"/><line x1="15.5" y1="15.5" x2="20" y2="20"/>',
+  grid:'<rect x="3.5" y="4" width="7.5" height="7" rx="1.5"/><rect x="13" y="4" width="7.5" height="7" rx="1.5"/><rect x="3.5" y="13" width="7.5" height="7" rx="1.5"/><rect x="13" y="13" width="7.5" height="7" rx="1.5" fill="'+O+'" fill-opacity="0.42"/>'
+};
+var CITATIONS=[{c:"sci",t:"Bouger régulièrement réduit le risque de mortalité toutes causes d'environ 30 % — la constance compte plus que l'intensité."},{c:"sci",t:"150 minutes d'activité modérée par semaine : le seuil recommandé par l'OMS pour protéger durablement ta santé."},{c:"sci",t:"Même 75 minutes d'activité soutenue par semaine suffisent à réduire nettement le risque cardiovasculaire."},{c:"sci",t:"La régularité de l'activité physique est l'un des prédicteurs les plus fiables de la longévité en bonne santé."},{c:"sci",t:"Marcher chaque jour est associé à une baisse mesurable de la mortalité, et le bénéfice grimpe avec le nombre de pas."},{c:"sci",t:"Dès 4 000 pas par jour, le risque de mortalité commence à diminuer significativement."},{c:"sci",t:"Autour de 7 000 à 8 000 pas quotidiens, on capte l'essentiel des bénéfices sur la longévité."},{c:"sci",t:"L'activité physique régulière abaisse la tension artérielle, comme un médicament — mais sans ordonnance."},{c:"sci",t:"Bouger souvent améliore la sensibilité à l'insuline et protège contre le diabète de type 2."},{c:"sci",t:"Une bonne capacité cardio-respiratoire est l'un des meilleurs indicateurs d'espérance de vie."},{c:"sci",t:"Remplacer 30 minutes assises par de l'activité légère est associé à une baisse du risque de décès prématuré."},{c:"sci",t:"L'activité régulière réduit le risque de plusieurs cancers, dont ceux du côlon et du sein."},{c:"sci",t:"Le cœur est un muscle : sollicité régulièrement, il devient plus efficace et bat plus lentement au repos."},{c:"sci",t:"Une fréquence cardiaque de repos basse reflète souvent un cœur entraîné et en bonne santé."},{c:"sci",t:"L'exercice régulier augmente le « bon » cholestérol (HDL) et aide à réguler les triglycérides."},{c:"sci",t:"Bouger fait baisser l'inflammation chronique de bas grade, impliquée dans de nombreuses maladies."},{c:"sci",t:"Les populations les plus longévives du monde ne font pas de sport intense : elles bougent sans arrêt, naturellement."},{c:"sci",t:"L'activité physique régulière renforce le système immunitaire et réduit la fréquence des infections."},{c:"sci",t:"Chaque tranche d'activité compte : les bénéfices cardiovasculaires s'accumulent sur toute la vie."},{c:"sci",t:"Rester actif en vieillissant préserve l'autonomie et réduit fortement le risque de chute."},{c:"sci",t:"L'activité physique régulière stimule le BDNF, une protéine clé pour la mémoire et l'apprentissage."},{c:"sci",t:"Bouger régulièrement réduit les symptômes d'anxiété et de dépression, avec un effet comparable à certaines thérapies."},{c:"sci",t:"L'exercice libère des endorphines : 20 minutes suffisent souvent à améliorer l'humeur."},{c:"sci",t:"L'activité physique régulière améliore la qualité et la profondeur du sommeil."},{c:"sci",t:"Une marche quotidienne réduit le stress en abaissant le cortisol."},{c:"sci",t:"Le mouvement régulier protège le cerveau du déclin cognitif lié à l'âge."},{c:"sci",t:"L'exercice augmente le flux sanguin cérébral et favorise la création de nouveaux neurones."},{c:"sci",t:"Bouger améliore la concentration et la productivité dans les heures qui suivent."},{c:"sci",t:"L'activité physique régulière est associée à un risque réduit de démence et d'Alzheimer."},{c:"sci",t:"Une simple pause active au travail relance l'attention et réduit la fatigue mentale."},{c:"sci",t:"Le sommeil et l'activité physique se renforcent mutuellement : mieux tu bouges, mieux tu dors, et inversement."},{c:"sci",t:"S'exposer au mouvement en journée aide à réguler l'horloge biologique et l'endormissement."},{c:"sci",t:"L'exercice régulier améliore l'estime de soi, indépendamment des résultats esthétiques."},{c:"sci",t:"Bouger en pleine nature amplifie les bénéfices sur l'humeur et la réduction du stress."},{c:"sci",t:"La régularité du mouvement nourrit la résilience face au stress du quotidien."},{c:"sci",t:"Après 30 ans, on perd naturellement du muscle chaque année : la régularité du mouvement freine ce déclin."},{c:"sci",t:"Le renforcement musculaire régulier préserve la masse musculaire et la force jusqu'à un âge avancé."},{c:"sci",t:"Les os se renforcent quand on les sollicite : marcher, monter, porter stimule la densité osseuse."},{c:"sci",t:"Le muscle est métaboliquement actif : plus tu en entretiens, plus tu dépenses d'énergie au repos."},{c:"sci",t:"Le NEAT — l'énergie dépensée hors sport, dans les gestes du quotidien — représente une large part de la dépense quotidienne."},{c:"sci",t:"Monter les escaliers, porter ses courses, jardiner : ces gestes comptent autant que bien des séances."},{c:"sci",t:"Bouger après un repas aide à réguler la glycémie : quelques minutes suffisent."},{c:"sci",t:"Se lever et bouger 2 à 3 minutes chaque demi-heure contrecarre les effets de la position assise prolongée."},{c:"sci",t:"La sédentarité est un facteur de risque indépendant : même sportif, rester assis trop longtemps nuit."},{c:"sci",t:"Les muscles sollicités régulièrement deviennent de meilleurs « capteurs » de sucre dans le sang."},{c:"sci",t:"L'activité régulière entretient la souplesse des articulations et réduit les raideurs."},{c:"sci",t:"Travailler l'équilibre quelques minutes par jour réduit nettement le risque de chute avec l'âge."},{c:"sci",t:"La force de préhension est un marqueur de santé globale — la cultiver porte ses fruits."},{c:"sci",t:"Le corps s'adapte à ce qu'on lui demande souvent : la régularité façonne durablement la physiologie."},{c:"sci",t:"Bouger entretient la masse maigre, qui protège le métabolisme sur le long terme."},{c:"sci",t:"Fractionner l'activité en petites doses dans la journée est aussi efficace qu'une longue séance continue."},{c:"sci",t:"L'« exercice snacking » — de courtes bouffées d'effort — améliore la condition physique avec une excellente adhérence."},{c:"sci",t:"Quelques minutes d'effort avant un repas peuvent améliorer le contrôle de la glycémie."},{c:"sci",t:"En moyenne, il faut environ 66 jours pour qu'un comportement devienne automatique — la patience est scientifique."},{c:"sci",t:"Manquer un jour ne casse pas une habitude : ce qui compte, c'est la tendance sur la durée."},{c:"sci",t:"La courbe dose-réponse est la plus forte au début : passer de « rien » à « un peu » change déjà tout."},{c:"sci",t:"Trois fois 10 minutes valent une fois 30 minutes : ton corps additionne les efforts."},{c:"sci",t:"Les premières minutes de mouvement sont les plus rentables pour la santé : commencer, c'est déjà gagner."},{c:"sci",t:"L'effet d'une séance sur l'humeur est immédiat ; l'effet sur le cœur et les muscles, lui, se construit jour après jour."},{c:"sci",t:"La constance bat l'intensité : un effort modéré et régulier surpasse les pics rares et épuisants."},{c:"sport",t:"La progression vient de la régularité, pas de la performance d'un seul jour."},{c:"sport",t:"Mieux vaut s'entraîner 4 fois par semaine 20 minutes qu'une seule fois 2 heures."},{c:"sport",t:"Le surentraînement freine ; la constance modérée, elle, construit."},{c:"sport",t:"Un corps entraîné régulièrement récupère plus vite et se blesse moins."},{c:"sport",t:"La meilleure séance est celle que tu feras vraiment — choisis ce qui tient dans ta vie."},{c:"sport",t:"L'échauffement régulier protège tes articulations et prolonge ta pratique dans le temps."},{c:"sport",t:"Le repos fait partie de l'entraînement : c'est en récupérant que le corps progresse."},{c:"sport",t:"Varier les mouvements entretient la motivation et sollicite tout le corps."},{c:"sport",t:"La technique avant la charge : un geste propre répété souvent vaut mieux qu'un effort brouillon."},{c:"sport",t:"On ne perd pas en un jour ce qu'on a mis des semaines à construire — la régularité crée une réserve."},{c:"sport",t:"Le plus dur n'est pas l'effort, c'est de remettre ses baskets : rends ce geste facile."},{c:"sport",t:"Un objectif de fréquence (« bouger chaque jour ») tient mieux dans le temps qu'un objectif de performance."},{c:"sport",t:"L'intensité se module, la régularité se garde : certains jours intenses, d'autres légers, mais bouger toujours."},{c:"sport",t:"Compter ses séances sur le mois, pas sur la journée : c'est l'accumulation qui transforme."},{c:"sport",t:"Le mouvement le plus utile est celui qui s'intègre sans effort dans ta journée."},{c:"sport",t:"S'entraîner avec quelqu'un double l'adhérence : l'engagement social soutient la régularité."},{c:"sport",t:"Note tes séances : ce qui se mesure se maintient."},{c:"sport",t:"Le meilleur exercice pour toi est celui que tu aimes assez pour le répéter longtemps."},{c:"sport",t:"Démarrer petit et tenir longtemps bat démarrer fort et abandonner vite."},{c:"sport",t:"La forme physique est une compétence : elle s'entretient par la pratique, pas par la volonté ponctuelle."},{c:"sport",t:"Monter les escaliers est l'un des gestes les plus complets : jambes, fessiers, cœur, souffle."},{c:"sport",t:"Quelques étages par jour, c'est un entraînement cardio gratuit qui s'accumule au fil de l'année."},{c:"sport",t:"Marcher d'un bon pas 10 minutes relance la circulation et réveille le métabolisme."},{c:"sport",t:"Faire ses courses à pied, c'est du renforcement fonctionnel déguisé en routine."},{c:"sport",t:"Se garer plus loin, descendre un arrêt plus tôt : des minutes actives qui comptent vraiment."},{c:"sport",t:"Le ménage actif — porter, ranger, frotter — est une vraie dépense énergétique, pas une corvée."},{c:"sport",t:"Jardiner sollicite force, mobilité et endurance : un entraînement complet en plein air."},{c:"sport",t:"Transformer un geste du quotidien en exercice, c'est gagner du temps et de la santé d'un coup."},{c:"sport",t:"Téléphoner en marchant transforme un temps passif en mouvement utile."},{c:"sport",t:"Chaque escalier monté est un dépôt sur ton compte santé à long terme."},{c:"sport",t:"Préférer l'escalier à l'ascenseur, c'est une décision minuscule aux effets cumulés énormes."},{c:"sport",t:"Bien se baisser (en pliant les genoux, dos droit) renforce les jambes à chaque ramassage."},{c:"sport",t:"Porter ses sacs en gainant le ventre, c'est du renforcement profond à chaque trajet."},{c:"sport",t:"Le mouvement intégré au quotidien est le plus durable : pas besoin d'y « penser » comme à une séance."},{c:"sport",t:"Une journée active vaut mieux qu'une heure de sport suivie de douze heures assises."},{c:"conseil",t:"Associe ta nouvelle habitude à un repère existant : « après le café, je bouge 5 minutes »."},{c:"conseil",t:"Rends le mouvement inévitable : pose tes baskets en évidence la veille."},{c:"conseil",t:"Commence ridiculement petit : une habitude minuscule tenue bat une grande abandonnée."},{c:"conseil",t:"Vise la régularité avant la durée : 5 minutes chaque jour valent mieux qu'une heure le dimanche."},{c:"conseil",t:"Si tu sautes un jour, ne saute jamais deux jours de suite : c'est la règle d'or de la constance."},{c:"conseil",t:"Planifie le moment exact où tu bougeras : une intention datée a bien plus de chances d'aboutir."},{c:"conseil",t:"Prépare l'environnement : moins il y a de friction, plus l'habitude tient."},{c:"conseil",t:"Célèbre chaque petite victoire : le cerveau répète ce qui est récompensé."},{c:"conseil",t:"Garde une trace visible de ta régularité : une série qui s'allonge motive à ne pas la rompre."},{c:"conseil",t:"Choisis une activité que tu peux faire même fatiguée : c'est elle qui tiendra dans la durée."},{c:"conseil",t:"Le « assez bien » fait, régulièrement, bat le « parfait » jamais commencé."},{c:"conseil",t:"Réduis l'objectif les jours difficiles, mais ne le supprime pas : garder le fil compte plus que la quantité."},{c:"conseil",t:"Empile les habitudes : ajoute le nouveau geste juste après un geste déjà automatique."},{c:"conseil",t:"Rends-le agréable : musique, podcast, paysage — le plaisir entretient la constance."},{c:"conseil",t:"Engage-toi auprès de quelqu'un : dire son objectif à voix haute augmente l'adhérence."},{c:"conseil",t:"Anticipe les obstacles : prévois un plan B pour les jours de pluie ou de fatigue."},{c:"conseil",t:"Mesure le progrès sur le mois, pas sur la séance : la tendance compte plus que l'écart."},{c:"conseil",t:"Pardonne-toi un jour manqué et reprends sans culpabilité : la culpabilité casse les habitudes, pas l'oubli."},{c:"conseil",t:"Le matin protège mieux la régularité : ce qui est fait tôt ne peut plus être annulé par la journée."},{c:"conseil",t:"Transforme l'attente en mouvement : quelques squats pendant que le café passe."},{c:"conseil",t:"Lève-toi toutes les 30 minutes : même 1 minute debout relance la machine."},{c:"conseil",t:"Fais de chaque trajet une occasion de bouger un peu plus qu'hier."},{c:"conseil",t:"Bois de l'eau régulièrement : se lever pour son verre, c'est aussi se remettre en mouvement."},{c:"conseil",t:"Étire-toi 2 minutes au réveil : tu prépares ton corps à une journée plus mobile."},{c:"conseil",t:"Tiens-toi droit : une bonne posture économise ton énergie et protège ton dos."},{c:"conseil",t:"Alterne assis et debout dans la journée : ton corps n'est pas fait pour rester figé."},{c:"conseil",t:"Marche pendant tes appels : tu cumuleras des centaines de pas sans y penser."},{c:"conseil",t:"Profite de la pub ou du chargement d'une page pour bouger quelques secondes."},{c:"conseil",t:"Range en bougeant consciemment : chaque objet porté est un mini-exercice."},{c:"conseil",t:"Fais tes courses sans chariot quand tu peux : porter, c'est renforcer."},{c:"conseil",t:"Privilégie les escaliers : ton cœur te remerciera sur des années."},{c:"conseil",t:"Marche après le dîner : 10 minutes aident la digestion et la glycémie."},{c:"conseil",t:"Gare-toi au fond du parking : ces pas en plus s'additionnent toute l'année."},{c:"conseil",t:"Lève-toi pour parler à un collègue plutôt que d'envoyer un message."},{c:"conseil",t:"Transforme l'ennui en mouvement plutôt qu'en grignotage : bouger coupe souvent l'envie."},{c:"moti",t:"Chaque petit geste d'aujourd'hui est un cadeau à la personne que tu seras dans dix ans."},{c:"moti",t:"La régularité n'est pas un sprint, c'est une rivière : douce, constante, elle finit par tout sculpter."},{c:"moti",t:"Tu n'as pas à être parfaite, juste constante."},{c:"moti",t:"Le corps oublie les exploits isolés mais se souvient des habitudes."},{c:"moti",t:"Ce que tu répètes te construit. Choisis bien ce que tu répètes."},{c:"moti",t:"Les grands changements sont la somme de gestes minuscules tenus longtemps."},{c:"moti",t:"Aujourd'hui compte, même si tu n'en vois pas encore le résultat."},{c:"moti",t:"La motivation te lance, l'habitude te fait avancer."},{c:"moti",t:"Un pas après l'autre, c'est encore la façon la plus sûre d'aller loin."},{c:"moti",t:"Tu construis ta santé comme une maison : une brique par jour."},{c:"moti",t:"Le meilleur moment pour commencer, c'était hier ; le deuxième meilleur, c'est maintenant."},{c:"moti",t:"La constance transforme l'ordinaire en extraordinaire."},{c:"moti",t:"Bouger aujourd'hui, c'est voter pour la version la plus vivante de toi-même."},{c:"moti",t:"Ta régularité d'aujourd'hui est la liberté de mouvement de demain."},{c:"moti",t:"On ne regrette jamais la séance qu'on a faite, seulement celle qu'on a sautée."},{c:"moti",t:"Sois fière de te présenter, même les jours sans éclat : c'est là que se gagne la constance."},{c:"moti",t:"Le progrès est silencieux : il travaille pendant que tu répètes."},{c:"moti",t:"Tu n'as pas besoin de motivation tous les jours, juste d'une habitude qui te porte."},{c:"moti",t:"Chaque jour actif est une ligne de plus dans l'histoire d'un corps en bonne santé."},{c:"moti",t:"La discipline, c'est se souvenir de ce qu'on veut vraiment sur le long terme."},{c:"moti",t:"Commence là où tu es, avec ce que tu as. C'est toujours suffisant."},{c:"moti",t:"Les résultats aiment les gens réguliers."},{c:"moti",t:"Ton corps est la seule maison que tu habiteras toute ta vie : entretiens-la chaque jour."},{c:"moti",t:"La forme se loue, elle ne s'achète pas : le loyer, c'est la régularité."},{c:"moti",t:"Avance à ton rythme, mais avance chaque jour."},{c:"sci",t:"L'activité physique régulière améliore la fonction des vaisseaux sanguins, clé d'un cœur en santé."},{c:"sci",t:"Bouger régulièrement aide à réguler l'appétit et les signaux de satiété."},{c:"sci",t:"L'exercice d'endurance augmente le nombre et l'efficacité des mitochondries, les « centrales énergétiques » des cellules."},{c:"sci",t:"La régularité améliore la VO2 max, l'un des meilleurs marqueurs de santé et de longévité."},{c:"sci",t:"Bouger entretient la santé des tendons et du cartilage par une sollicitation douce et répétée."},{c:"sci",t:"L'activité régulière réduit la graisse viscérale, la plus dangereuse pour la santé."},{c:"sci",t:"Le mouvement stimule le système lymphatique et l'élimination des déchets de l'organisme."},{c:"sci",t:"Marcher après 60 ans est associé à une meilleure autonomie et à moins d'hospitalisations."},{c:"sci",t:"L'exercice régulier améliore la variabilité de la fréquence cardiaque, signe d'un système nerveux équilibré."},{c:"sci",t:"Bouger un peu chaque jour vaut mieux, pour la santé métabolique, que beaucoup une seule fois."},{c:"sci",t:"Les bénéfices de l'activité physique apparaissent à tout âge : il n'est jamais trop tard pour commencer."},{c:"sci",t:"Une activité régulière modérée renforce davantage la santé qu'un effort intense mais rare."},{c:"sci",t:"L'exercice agit comme un anti-âge cellulaire en préservant la longueur des télomères."},{c:"sci",t:"Bouger régulièrement améliore la circulation veineuse et réduit la sensation de jambes lourdes."},{c:"sci",t:"L'activité physique aide à stabiliser l'humeur en régulant la sérotonine et la dopamine."},{c:"sport",t:"La constance crée la forme ; la forme crée l'envie ; l'envie nourrit la constance."},{c:"sport",t:"Un corps qui bouge tous les jours vieillit plus lentement qu'un corps qui s'économise."},{c:"sport",t:"Mieux vaut une habitude imparfaite et durable qu'un programme parfait et éphémère."},{c:"sport",t:"Le mouvement est un médicament dont la posologie idéale est : un peu, souvent."},{c:"sport",t:"Bouge à l'intensité où tu peux encore parler : c'est la zone reine de la régularité."},{c:"sport",t:"Chaque séance est un dépôt ; la santé, c'est l'intérêt composé du mouvement."},{c:"sport",t:"Échauffe-toi toujours : c'est l'assurance qui te permet de tenir des années."},{c:"sport",t:"La meilleure routine est invisible : elle s'est fondue dans ta vie."},{c:"conseil",t:"Garde une tenue de sport prête : la friction en moins, c'est la séance en plus."},{c:"conseil",t:"Fixe-toi un minimum non négociable, si petit qu'il est impossible d'échouer."},{c:"conseil",t:"Relie chaque effort à ton « pourquoi » : la régularité a besoin de sens."},{c:"conseil",t:"Visualise demain matin : décide maintenant du geste que tu feras."},{c:"conseil",t:"Un jour à la fois : tu n'as à réussir qu'aujourd'hui."},{c:"conseil",t:"Fais-en un rendez-vous avec toi-même, aussi sérieux qu'un rendez-vous médical."},{c:"conseil",t:"Récompense ta série, pas seulement tes résultats : la constance mérite d'être fêtée."},{c:"moti",t:"Petit pas, grand chemin."},{c:"moti",t:"La régularité est une forme d'amour de soi."},{c:"moti",t:"Tu es à un mouvement de te sentir mieux."},{c:"moti",t:"Ce que tu fais souvent compte plus que ce que tu fais rarement."},{c:"moti",t:"Le futur se construit dans les gestes d'aujourd'hui."},{c:"moti",t:"Reste constante, le reste suivra."},{c:"moti",t:"Chaque jour est une page : écris-en une active."},{c:"moti",t:"L'habitude est le pilote automatique de la réussite."},{c:"moti",t:"Ton effort d'aujourd'hui est invisible aujourd'hui, évident dans un an."},{c:"moti",t:"La meilleure version de toi se construit un jour ordinaire à la fois."},{c:"sci",t:"L'activité physique régulière augmente l'espérance de vie en bonne santé, pas seulement la durée de vie."},{c:"sci",t:"Bouger réduit le risque d'accident vasculaire cérébral en entretenant la souplesse des artères."},{c:"sci",t:"L'exercice régulier aide à prévenir l'ostéoporose en stimulant la formation osseuse."},{c:"sci",t:"Une activité douce mais quotidienne réduit les douleurs lombaires chroniques mieux que le repos."},{c:"sci",t:"Le mouvement régulier améliore le transit intestinal et le confort digestif."},{c:"sci",t:"L'activité physique réduit le risque de calculs biliaires et de maladies du foie."},{c:"sci",t:"Bouger régulièrement améliore la tolérance au glucose dès les premières semaines."},{c:"sci",t:"L'exercice augmente le volume de l'hippocampe, région du cerveau dédiée à la mémoire."},{c:"sci",t:"La marche rapide est associée à un risque cardiovasculaire plus bas que la marche lente, à distance égale."},{c:"sci",t:"S'entraîner en endurance abaisse la fréquence cardiaque de repos en quelques semaines."},{c:"sci",t:"L'activité physique régulière réduit le risque de récidive après de nombreux cancers."},{c:"sci",t:"Bouger améliore la qualité de vie des personnes atteintes de maladies chroniques."},{c:"sci",t:"Le renforcement musculaire deux fois par semaine est recommandé par l'OMS, en plus du cardio."},{c:"sci",t:"L'exercice régulier améliore la capacité pulmonaire et l'efficacité de la respiration."},{c:"sci",t:"Une activité physique modérée renforce la barrière immunitaire des voies respiratoires."},{c:"sci",t:"Le mouvement régulier aide à stabiliser le poids sur le long terme, au-delà des régimes."},{c:"sci",t:"L'activité physique augmente la dépense énergétique pendant des heures après l'effort."},{c:"sci",t:"Bouger réveille la lipolyse : le corps puise plus volontiers dans ses réserves de graisse."},{c:"sci",t:"L'exercice régulier réduit la fatigue chronique, paradoxalement, en augmentant l'énergie disponible."},{c:"sci",t:"Une bonne condition physique à 50 ans prédit une vieillesse plus autonome et plus active."},{c:"sci",t:"Marcher pieds variés (montée, descente, terrain souple) sollicite davantage de muscles stabilisateurs."},{c:"sci",t:"L'activité physique régulière améliore la santé de la peau via une meilleure microcirculation."},{c:"sci",t:"Bouger en groupe ou en plein air renforce le lien social, lui-même protecteur pour la santé."},{c:"sci",t:"Le mouvement quotidien réduit le risque de syndrome métabolique."},{c:"sci",t:"L'exercice régulier diminue la résistance à la leptine, l'hormone de la satiété."},{c:"sci",t:"Une activité régulière améliore la sensibilité du corps aux signaux de faim réels."},{c:"sci",t:"Le sport d'endurance augmente le volume sanguin et l'apport d'oxygène aux muscles."},{c:"sci",t:"Bouger régulièrement protège la fonction rénale sur le long terme."},{c:"sci",t:"L'activité physique réduit la pression artérielle systolique de plusieurs points en quelques semaines."},{c:"sci",t:"Le mouvement entretient la plasticité cérébrale, capacité du cerveau à apprendre et s'adapter."},{c:"sci",t:"Un effort régulier améliore l'efficacité du cœur : il envoie plus de sang à chaque battement."},{c:"sci",t:"Bouger renforce les muscles respiratoires et facilite l'effort au quotidien."},{c:"sci",t:"L'activité physique régulière réduit le risque de dépression de l'ordre d'un quart."},{c:"sci",t:"Marcher 30 minutes par jour est associé à un risque d'hypertension nettement réduit."},{c:"sci",t:"L'exercice favorise un microbiote intestinal plus diversifié, signe de bonne santé."},{c:"sci",t:"Une routine active réduit le risque de chute en améliorant force, équilibre et réflexes."},{c:"sci",t:"Le mouvement régulier protège les articulations en nourrissant le cartilage par le mouvement même."},{c:"sci",t:"L'activité physique régulière améliore le contrôle de la glycémie après les repas."},{c:"sci",t:"Bouger tôt dans la journée renforce la régulation de l'horloge biologique."},{c:"sci",t:"L'exercice régulier abaisse durablement le niveau de stress perçu."},{c:"sci",t:"Une seule séance améliore l'humeur ; mille séances changent une vie."},{c:"sci",t:"La régularité de l'activité prédit mieux la santé que l'intensité ponctuelle."},{c:"sci",t:"Le corps humain est conçu pour le mouvement fréquent, pas pour l'immobilité prolongée."},{c:"sci",t:"Bouger entretient la coordination, un atout précieux qui se perd sans pratique."},{c:"sci",t:"L'activité physique régulière améliore la qualité du sommeil profond, le plus réparateur."},{c:"sport",t:"L'endurance se construit lentement : respecte la progressivité et tu tiendras des années."},{c:"sport",t:"Alterne efforts faciles et plus soutenus : ton corps progresse dans la variété."},{c:"sport",t:"Un bon entraînement laisse de l'énergie pour le lendemain, pas l'épuisement."},{c:"sport",t:"Écoute les signaux de ton corps : la régularité durable respecte la récupération."},{c:"sport",t:"La mobilité articulaire entretenue chaque jour préserve l'amplitude de tes mouvements."},{c:"sport",t:"Renforce ton dos et ton centre : un tronc solide protège tout le corps."},{c:"sport",t:"Travaille tes jambes : ce sont elles qui te porteront toute ta vie."},{c:"sport",t:"Le gainage régulier protège la colonne et améliore la posture."},{c:"sport",t:"Respire amplement pendant l'effort : le souffle est ton moteur."},{c:"sport",t:"Étire-toi après l'effort pour entretenir la souplesse et limiter les raideurs."},{c:"sport",t:"Bouge avec plaisir : l'adhérence naît du plaisir, pas de la contrainte."},{c:"sport",t:"Hydrate-toi avant d'avoir soif : la performance et la récupération en dépendent."},{c:"sport",t:"Un sommeil suffisant est le meilleur complément de tout entraînement."},{c:"sport",t:"Le meilleur programme est celui que tu peux répéter même les semaines chargées."},{c:"sport",t:"La régularité crée la base ; sur cette base, tout progrès devient possible."},{c:"sport",t:"Marche en montée pour muscler les jambes ; en descente pour le contrôle."},{c:"sport",t:"Porte, pousse, tire dans la vie quotidienne : c'est du renforcement fonctionnel réel."},{c:"sport",t:"Le corps aime la routine du mouvement autant qu'il déteste l'immobilité."},{c:"sport",t:"Fixe un cap de fréquence pour le mois et tiens-le, quoi qu'il arrive."},{c:"sport",t:"Chaque jour bougé renforce l'habitude autant que le muscle."},{c:"conseil",t:"Profite du brossage de dents pour tenir en équilibre sur un pied : travail discret, gains réels."},{c:"conseil",t:"En cuisine, fais quelques squats pendant que ça mijote."},{c:"conseil",t:"Devant la télé, lève-toi à chaque générique pour bouger une minute."},{c:"conseil",t:"Joue avec tes enfants au sol : te relever souvent est un excellent exercice."},{c:"conseil",t:"Au bureau, marche jusqu'à la fontaine plutôt que de garder une bouteille à portée."},{c:"conseil",t:"Réponds au téléphone debout et marche : tu cumuleras des pas sans effort."},{c:"conseil",t:"Range au fur et à mesure en bougeant : chaque aller-retour compte."},{c:"conseil",t:"Choisis l'escalier au moins une fois par jour, puis augmente peu à peu."},{c:"conseil",t:"Étire ta nuque et tes épaules toutes les heures devant l'écran."},{c:"conseil",t:"Marche pendant que tu écoutes un podcast : double usage du temps."},{c:"conseil",t:"Quand tu attends (bus, micro-ondes), bouge : mollets, équilibre, respiration."},{c:"conseil",t:"Fais une promenade après le déjeuner : digestion, glycémie et clarté mentale."},{c:"conseil",t:"Garde de l'eau loin de toi : aller la chercher t'oblige à te lever."},{c:"conseil",t:"Transforme l'attente des enfants à l'école en marche autour du quartier."},{c:"conseil",t:"Privilégie les déplacements actifs pour les petits trajets du quotidien."},{c:"conseil",t:"Mets une alarme « bouger » toutes les heures les jours sédentaires."},{c:"conseil",t:"Prépare ta séance la veille : moins tu décides le jour J, plus tu agis."},{c:"conseil",t:"Commence par 2 minutes : souvent, l'élan fait le reste."},{c:"conseil",t:"Note ta série de jours actifs : ne pas la rompre devient un jeu motivant."},{c:"conseil",t:"Fais équipe avec un proche : se motiver à deux double les chances de tenir."},{c:"conseil",t:"Récompense-toi après une semaine régulière, pas après une seule séance."},{c:"conseil",t:"Le soir, prépare tes affaires : le matin, il ne reste qu'à agir."},{c:"conseil",t:"Bouge un peu même les jours « sans » : garder le fil compte plus que la quantité."},{c:"conseil",t:"Choisis un créneau fixe : l'heure régulière ancre l'habitude."},{c:"conseil",t:"Fractionne : trois fois 5 minutes dans la journée, c'est déjà 15 minutes gagnées."},{c:"conseil",t:"Range les courses en plusieurs voyages : plus de portage, plus de pas."},{c:"conseil",t:"Descends une station avant : quelques minutes de marche offertes."},{c:"conseil",t:"Tiens-toi droit en marchant : tu engages plus de muscles et tu respires mieux."},{c:"conseil",t:"Profite d'une pause café pour faire le tour du pâté de maisons."},{c:"conseil",t:"Mets de la musique entraînante : elle rend le mouvement plus facile et plus agréable."},{c:"conseil",t:"Vise un geste actif après chaque repas : la régularité aime les déclencheurs fixes."},{c:"conseil",t:"Évite de rester assis plus d'une heure d'affilée : lève-toi, même brièvement."},{c:"conseil",t:"Fais ton lit et range ta chambre activement : mouvement et clarté d'esprit."},{c:"conseil",t:"Garde tes baskets près de la porte : l'environnement décide souvent à ta place."},{c:"conseil",t:"Quand tu hésites à bouger, promets-toi juste 5 minutes : tu en feras souvent plus."},{c:"moti",t:"Un jour actif de plus, c'est une promesse tenue envers toi-même."},{c:"moti",t:"La constance est un superpouvoir tranquille."},{c:"moti",t:"Tu ne construis pas une séance, tu construis une vie."},{c:"moti",t:"Ce n'est pas la taille du pas qui compte, c'est de continuer à marcher."},{c:"moti",t:"La version de toi qui bouge chaque jour t'attend de l'autre côté de l'habitude."},{c:"moti",t:"Sème le mouvement aujourd'hui, récolte l'énergie demain."},{c:"moti",t:"Les habitudes sont les fondations invisibles des grandes transformations."},{c:"moti",t:"Avancer doucement, c'est encore avancer."},{c:"moti",t:"Ta régularité parle plus fort que tes intentions."},{c:"moti",t:"Le mouvement d'aujourd'hui est un cadeau à ton corps de demain."},{c:"moti",t:"Reste dans le jeu : la persévérance bat le talent qui abandonne."},{c:"moti",t:"Chaque jour compte, surtout ceux où tu n'en as pas envie."},{c:"moti",t:"Tu es plus forte que l'excuse du jour."},{c:"moti",t:"La discipline d'aujourd'hui est la fierté de demain."},{c:"moti",t:"Bouger, c'est se choisir."},{c:"moti",t:"La régularité transforme les rêves en routines, et les routines en résultats."},{c:"moti",t:"Un petit effort répété déplace des montagnes."},{c:"moti",t:"Ta santé est un projet de toute une vie : avance une journée à la fois."},{c:"moti",t:"Le plus beau progrès est celui qu'on construit sans bruit, jour après jour."},{c:"moti",t:"Commence, continue, recommence : c'est tout le secret."},{c:"sci",t:"L'activité physique régulière réduit le risque de fibrillation et stabilise le rythme cardiaque."},{c:"sci",t:"Bouger améliore la circulation du sang vers les extrémités et réchauffe naturellement le corps."},{c:"sci",t:"L'exercice régulier augmente la production d'endocannabinoïdes, source du bien-être après l'effort."},{c:"sci",t:"Une routine active réduit le risque de plusieurs maladies inflammatoires chroniques."},{c:"sci",t:"Le mouvement quotidien améliore la posture en renforçant les muscles profonds du dos."},{c:"sci",t:"L'activité physique régulière aide à réguler le taux de sucre même chez les personnes à risque."},{c:"sci",t:"Bouger augmente la densité capillaire des muscles, améliorant l'apport en oxygène."},{c:"sci",t:"L'exercice régulier ralentit la perte de force liée à l'âge, la sarcopénie."},{c:"sci",t:"Une activité physique constante améliore la récupération après maladie ou opération."},{c:"sci",t:"Le mouvement régulier réduit le risque de thrombose en évitant la stagnation du sang."},{c:"sci",t:"L'activité physique améliore la qualité du sperme et la fertilité, hommes comme femmes."},{c:"sci",t:"Bouger régulièrement réduit les bouffées de chaleur et améliore le confort à la ménopause."},{c:"sci",t:"L'exercice régulier renforce le plancher pelvien lorsqu'il est sollicité intelligemment."},{c:"sci",t:"Une activité douce et régulière soulage l'arthrose en entretenant la mobilité articulaire."},{c:"sci",t:"Le mouvement quotidien améliore l'humeur dès la première semaine de pratique."},{c:"sport",t:"La constance bâtit la confiance : chaque jour tenu prouve que tu en es capable."},{c:"sport",t:"Mieux vaut finir une petite séance que rater une grande."},{c:"sport",t:"Le mouvement régulier est une assurance-vieillesse qui se paie en minutes."},{c:"sport",t:"Travaille l'équilibre : c'est lui qui te gardera autonome longtemps."},{c:"sport",t:"Un échauffement de 5 minutes change la qualité de toute la séance."},{c:"sport",t:"Le cardio entretient le cœur, le renforcement entretient le squelette : fais les deux."},{c:"sport",t:"Respecte tes jours de repos : la progression naît pendant la récupération."},{c:"sport",t:"Bouger souvent à faible intensité construit une base solide et durable."},{c:"sport",t:"L'important n'est pas la séance parfaite, mais la prochaine séance."},{c:"sport",t:"La forme se construit en saison, pas en un jour : pense en mois et en années."},{c:"conseil",t:"Démarre la journée par 3 minutes de mouvement : tu donnes le ton à tout le reste."},{c:"conseil",t:"Bloque ton créneau d'activité dans l'agenda comme un rendez-vous incontournable."},{c:"conseil",t:"Quand la motivation manque, réduis la barre, jamais la fréquence."},{c:"conseil",t:"Associe le mouvement à un plaisir : ta série préférée en marchant, par exemple."},{c:"conseil",t:"Fête chaque semaine régulière : la constance se nourrit de reconnaissance."},{c:"conseil",t:"Garde une liste de mini-séances de 5 minutes pour les jours débordés."},{c:"conseil",t:"Bouge avant de consulter ton téléphone le matin : la journée commence par toi."},{c:"conseil",t:"Marche en réfléchissant : les meilleures idées viennent souvent en mouvement."},{c:"conseil",t:"Transforme une corvée en exercice et tu gagnes sur les deux tableaux."},{c:"conseil",t:"Sois indulgente avec toi : reprendre vaut mieux que se reprocher."},{c:"moti",t:"La régularité, c'est l'art de gagner lentement mais sûrement."},{c:"moti",t:"Tu n'as rien à prouver, juste une habitude à honorer."},{c:"moti",t:"Le mouvement est une fête que ton corps t'offre chaque jour."},{c:"moti",t:"Aujourd'hui encore, choisis-toi."},{c:"moti",t:"Les petits gestes répétés écrivent les grandes histoires."},{c:"moti",t:"Ce que tu commences aujourd'hui, ton futur te remerciera de l'avoir tenu."},{c:"moti",t:"La constance est plus rare que le talent — et bien plus puissante."},{c:"moti",t:"Bouge, respire, recommence : la vie aime le mouvement."},{c:"moti",t:"Chaque jour est une nouvelle chance de tenir ta promesse."},{c:"moti",t:"Avance, même d'un pas. Surtout d'un pas."}];
+var CAT={ sci:{e:"🔬",l:"Science",col:"#C9A84C"}, conseil:{e:"💡",l:"Conseil",col:"#E0852E"}, sport:{e:"🏃",l:"Sport",col:"#6FCF97"}, moti:{e:"✨",l:"Inspiration",col:"#F5EDD0"} };
+function phraseDuJour(){ var d=new Date(); var di=Math.floor(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())/86400000); return CITATIONS[((di%CITATIONS.length)+CITATIONS.length)%CITATIONS.length]; }
+function frDate(){ var d=new Date(); var J=["Dimanche","Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi"]; var M=["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"]; return J[d.getDay()]+" "+d.getDate()+" "+M[d.getMonth()]; }
+function phraseCard(){
+  var p=phraseDuJour(), cat=CAT[p.c]||CAT.moti, mob=window.innerWidth<560;
+  var card=el("div","card"); card.style.position="relative"; card.style.textAlign="center";
+  var deco=el("div"); deco.style.cssText="position:absolute;top:8px;left:15px;color:var(--gold);opacity:.28;font-size:30px;font-weight:800;line-height:1"; deco.textContent="“"; card.appendChild(deco);
+  var top=el("div","row"); top.style.cssText="justify-content:space-between;align-items:center;margin-bottom:14px";
+  var eye=el("div","eyebrow"); eye.style.letterSpacing=".16em"; eye.textContent="✦ Phrase du jour";
+  var badge=el("div"); badge.style.cssText="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:"+cat.col+";background:transparent;border:1px solid "+cat.col+"66;border-radius:999px;padding:3px 11px;white-space:nowrap";
+  badge.innerHTML="<span>"+cat.e+"</span>"+cat.l;
+  top.appendChild(eye); top.appendChild(badge); card.appendChild(top);
+  var q=el("div"); q.style.cssText="font-size:"+(mob?16:17)+"px;line-height:1.5;color:var(--text);font-weight:500;font-style:italic;padding:0 6px"; q.textContent=p.t; card.appendChild(q);
+  var dt=el("div","muted"); dt.style.cssText="margin-top:13px;font-size:12px"; dt.textContent=frDate(); card.appendChild(dt);
+  return card;
+}
+function iconSvg(key){ return '<svg viewBox="0 0 24 24">'+(ICONS[key]||"")+'</svg>'; }
+
+/* ============================================================================
+   COUCHE DONNÉES
+============================================================================ */
+function emptyClient(nom){
+  return { id:genId(), nom:nom||"", login:slugLogin(nom||"cliente"), pin:"1234",
+    profil:{ age:"", taille:"", sexe:"", niveau:"" },
+    objectifText:"", dateDebut:today(),
+    joursReussis:[], objectifs:[], mesures:[], cibles:{ basale:null },
+    _mtime:0 };
+}
+function unionBy(arr, keyFn){
+  var map={};
+  arr.forEach(function(x){ var k=keyFn(x); if(k==null) return; if(!(k in map) || (x._ts||0) >= (map[k]._ts||0)) map[k]=x; });
+  return Object.keys(map).map(function(k){ return map[k]; });
+}
+/* fusion convergente d'une fiche : on ne perd jamais une entrée */
+function mergeClient(a, b){
+  if(!a) return b; if(!b) return a;
+  var newer = (b._mtime||0) >= (a._mtime||0) ? b : a;
+  var older = newer===b ? a : b;
+  var m = Object.assign({}, older, newer);            // champs simples = côté le plus récent
+  m.mesures   = unionBy((a.mesures||[]).concat(b.mesures||[]),   function(x){ return x.id; });
+  m.objectifs = unionBy((a.objectifs||[]).concat(b.objectifs||[]),function(x){ return x.id; });
+  m.joursReussis = Array.from(new Set((a.joursReussis||[]).concat(b.joursReussis||[]))).sort();
+  m._mtime = Math.max(a._mtime||0, b._mtime||0);
+  return m;
+}
+function ckey(id){ return "v2:c:" + id; }
+function lkey(id){ return "exhome_v2_" + id; }
+
+function loadClient(id){
+  var local = readLS(lkey(id));
+  return cloudGet(ckey(id)).then(function(cloud){
+    var merged = mergeClient(local, cloud) || local || cloud;
+    if(merged) writeLS(lkey(id), merged);
+    return merged;
+  }).catch(function(){ return local; });
+}
+/* sauvegarde = relire le cloud puis fusionner avant d'écrire (anti-écrasement) */
+function saveClient(c){
+  c._mtime = Date.now();
+  writeLS(lkey(c.id), c);
+  return cloudGet(ckey(c.id)).then(function(cloud){
+    var merged = mergeClient(cloud, c); merged._mtime = Date.now();
+    writeLS(lkey(merged.id), merged);
+    return cloudPut(ckey(merged.id), merged).then(function(){ return merged; });
+  }).catch(function(){ return cloudPut(ckey(c.id), c).then(function(){ return c; }); });
+}
+
+/* ----- roster (liste des clientes) ----- */
+var RKEY = "v2:__roster";
+function loadRoster(){
+  var local = readLS("exhome_v2_roster") || { clients:[], _mtime:0 };
+  return cloudGet(RKEY).then(function(cloud){
+    var merged = mergeRoster(local, cloud);
+    writeLS("exhome_v2_roster", merged);
+    return merged;
+  }).catch(function(){ return local; });
+}
+function mergeRoster(a,b){
+  if(!a) return b; if(!b) return a;
+  var clients = unionBy((a.clients||[]).concat(b.clients||[]), function(x){ return x.id; });
+  return { clients:clients, _mtime:Math.max(a._mtime||0,b._mtime||0) };
+}
+function saveRoster(r){
+  r._mtime = Date.now(); writeLS("exhome_v2_roster", r);
+  return cloudGet(RKEY).then(function(cloud){
+    var merged = mergeRoster(cloud, r); merged._mtime=Date.now();
+    writeLS("exhome_v2_roster", merged);
+    return cloudPut(RKEY, merged).then(function(){ return merged; });
+  }).catch(function(){ return cloudPut(RKEY, r).then(function(){ return r; }); });
+}
+
+/* ----- comptes coach ----- */
+var COACHES = { "aude":"exhome2026", "sylvain":"exhome2026" };
+
+/* ----- amorçage : 1ère fois, on crée 2 clientes connues pour pouvoir tester ----- */
+function seedIfEmpty(roster){
+  if(roster.clients && roster.clients.length) return Promise.resolve(roster);
+  var c1 = emptyClient("Aude de Gentile"); c1.login="aude.degentile"; c1.pin="1234";
+  var c2 = emptyClient("Thibault Le Moine"); c2.login="thibault.lemoine"; c2.pin="1234";
+  return Promise.all([saveClient(c1), saveClient(c2)]).then(function(){
+    var r = { clients:[
+      { id:c1.id, nom:c1.nom, login:c1.login, pin:c1.pin },
+      { id:c2.id, nom:c2.nom, login:c2.login, pin:c2.pin }
+    ], _mtime:0 };
+    return saveRoster(r);
+  });
+}
+
+/* ============================================================================
+   SESSION & NAVIGATION
+============================================================================ */
+var session = readLS("exhome_v2_session") || null;
+function setSession(s){ session=s; writeLS("exhome_v2_session", s); }
+function logout(){ session=null; localStorage.removeItem("exhome_v2_session"); render(); }
+
+var app = document.getElementById("app");
+function clear(){ app.innerHTML=""; }
+function toast(msg){ var t=document.createElement("div"); t.className="toast"; t.textContent=msg; document.body.appendChild(t);
+  setTimeout(function(){ t.style.opacity="0"; t.style.transition="opacity .4s"; setTimeout(function(){ t.remove(); }, 400); }, 1700); }
+
+function topbar(title, eyebrow, onBack){
+  var t=document.createElement("div"); t.className="top";
+  if(onBack){ var b=document.createElement("button"); b.className="back"; b.innerHTML="&larr;"; b.setAttribute("aria-label","Retour"); b.onclick=onBack; t.appendChild(b); }
+  var h=document.createElement("div");
+  h.innerHTML = (eyebrow?'<div class="eyebrow">'+esc(eyebrow)+'</div>':"") + '<h2>'+esc(title)+'</h2>';
+  t.appendChild(h); app.appendChild(t); return t;
+}
+function el(tag, cls, html){ var e=document.createElement(tag); if(cls) e.className=cls; if(html!=null) e.innerHTML=html; return e; }
+function field(labelTxt, inputEl){ var w=el("div","field"); var l=el("label","f"); l.textContent=labelTxt; w.appendChild(l); w.appendChild(inputEl); return w; }
+function input(value, attrs){ var i=el("input","inp"); i.value=value==null?"":value; if(attrs) Object.keys(attrs).forEach(function(k){ i.setAttribute(k,attrs[k]); }); return i; }
+
+/* ============================================================================
+   ÉCRANS
+============================================================================ */
+function render(){
+  clear();
+  if(!session){ screenLogin(); return; }
+  if(session.role==="coach"){ screenRoster(); return; }
+  if(session.role==="client"){ openClient(session.clientId, true); return; }
+  screenLogin();
+}
+
+/* ---------- LOGIN ---------- */
+function screenLogin(){
+  clear();
+  var head=el("div","center"); head.style.margin="30px 0 22px";
+  head.innerHTML='<div style="font-size:42px;font-weight:800;letter-spacing:.18em;color:var(--gold);line-height:1;text-shadow:0 2px 16px rgba(201,168,76,.28)">EX&nbsp;HOME</div>'
+    +'<div style="margin-top:11px;font-size:12px;letter-spacing:.22em;color:var(--dim);text-transform:uppercase">Ergo · Optimisation · Mouvement</div>';
+  app.appendChild(head);
+
+  var card=el("div","card");
+  var ti=el("h3","center"); ti.textContent="Connexion"; ti.style.fontSize="20px"; card.appendChild(ti);
+  var sub=el("div","center muted"); sub.style.cssText="margin:6px 0 18px;font-size:13px"; sub.textContent="Accès réservé aux membres Ex Home"; card.appendChild(sub);
+  var idIn=input("",{placeholder:"Identifiant",autocapitalize:"none",autocorrect:"off"});
+  var pinIn=input("",{placeholder:"Mot de passe",type:"password"});
+  card.appendChild(field("Identifiant", idIn));
+  card.appendChild(field("Mot de passe", pinIn));
+
+  var rem=el("div","row"); rem.style.margin="4px 0 6px";
+  var on=true; var tog=el("button"); tog.setAttribute("aria-label","Se souvenir de moi");
+  tog.style.cssText="width:46px;height:27px;border-radius:999px;border:none;cursor:pointer;position:relative;background:var(--gold);flex-shrink:0;transition:background .15s";
+  var knob=el("div"); knob.style.cssText="position:absolute;top:3px;left:22px;width:21px;height:21px;border-radius:50%;background:#0F2820;transition:left .15s"; tog.appendChild(knob);
+  tog.onclick=function(){ on=!on; tog.style.background=on?"var(--gold)":"var(--border)"; knob.style.left=on?"22px":"3px"; };
+  var rl=el("div"); rl.style.cssText="font-weight:700;font-size:14px"; rl.textContent="Se souvenir de moi";
+  rem.appendChild(tog); rem.appendChild(rl); card.appendChild(rem);
+  var note=el("div","muted"); note.style.cssText="font-size:11px;margin:0 0 16px"; note.textContent="✓ Identifiant et mot de passe mémorisés sur cet appareil"; card.appendChild(note);
+
+  var go=el("button","btn primary block","Se connecter →");
+  card.appendChild(go); app.appendChild(card);
+  var err=el("div","center"); err.style.cssText="color:var(--danger);margin:10px 0 0;font-size:13px"; app.appendChild(err);
+
+  function attempt(){
+    var u=(idIn.value||"").trim().toLowerCase(), p=(pinIn.value||"").trim();
+    if(!u||!p){ err.textContent="Entre ton identifiant et ton mot de passe."; return; }
+    if(COACHES[u] && COACHES[u]===p){ setSession({role:"coach",coach:u}); render(); return; }
+    err.textContent="Vérification…";
+    loadRoster().then(seedIfEmpty).then(function(r){
+      var m=(r.clients||[]).filter(function(c){ return c.login===u && String(c.pin)===p; })[0];
+      if(m){ setSession({role:"client",clientId:m.id,nom:m.nom}); render(); }
+      else err.textContent="Identifiant ou mot de passe incorrect.";
+    });
+  }
+  go.onclick=attempt;
+  pinIn.addEventListener("keydown",function(e){ if(e.key==="Enter") attempt(); });
+
+  app.appendChild(phraseCard());
+}
+
+/* ---------- ROSTER (coach) ---------- */
+function screenRoster(){
+  clear();
+  var t=topbar("Mes pratiquantes","Coach "+esc(session.coach));
+  var out=el("button","back"); out.textContent="Quitter"; out.onclick=logout; t.appendChild(el("div","spacer")); t.appendChild(out);
+
+  var loading=el("div","muted center","Chargement…"); loading.style.margin="30px 0"; app.appendChild(loading);
+
+  loadRoster().then(seedIfEmpty).then(function(r){
+    loading.remove();
+    var list=el("div");
+    (r.clients||[]).forEach(function(cl){
+      var card=el("div","card"); card.style.cursor="pointer"; card.style.display="flex"; card.style.alignItems="center"; card.style.gap="13px";
+      card.innerHTML='<div style="width:42px;height:42px;border-radius:12px;background:var(--surf);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--gold)">'+esc((cl.nom||"?").slice(0,1).toUpperCase())+'</div>';
+      var info=el("div"); info.style.flex="1";
+      info.innerHTML='<div style="font-weight:700">'+esc(cl.nom)+'</div><div class="muted" style="font-size:12px">Identifiant : '+esc(cl.login)+'</div>';
+      card.appendChild(info);
+      var beltSpan=el("span","pill","…"); card.appendChild(beltSpan);
+      card.onclick=function(){ openClient(cl.id, false); };
+      list.appendChild(card);
+      loadClient(cl.id).then(function(full){ if(full){ var b=belt((full.joursReussis||[]).length); beltSpan.textContent=b.n; beltSpan.style.color=b.c; } });
+    });
+    app.appendChild(list);
+
+    var add=el("button","btn line block","+ Ajouter une pratiquante"); add.style.marginTop="6px";
+    add.onclick=function(){ addClientForm(r); };
+    app.appendChild(add);
+  });
+}
+function addClientForm(roster){
+  clear();
+  topbar("Nouvelle pratiquante","Coach", screenRoster);
+  var c=el("div","card");
+  var nom=input("",{placeholder:"Prénom Nom"});
+  var pin=input("1234",{placeholder:"Code à 4 chiffres", inputmode:"numeric"});
+  c.appendChild(field("Nom complet", nom));
+  c.appendChild(field("Code d'accès", pin));
+  var save=el("button","btn primary block","Créer la fiche"); c.appendChild(save); app.appendChild(c);
+  save.onclick=function(){
+    var n=(nom.value||"").trim(); if(!n){ toast("Indique un nom."); return; }
+    var cli=emptyClient(n); cli.pin=(pin.value||"1234").trim();
+    // login unique
+    var base=cli.login, k=1, taken=(roster.clients||[]).map(function(x){return x.login;});
+    while(taken.indexOf(cli.login)>-1){ cli.login=base+(++k); }
+    save.disabled=true; save.textContent="Création…";
+    saveClient(cli).then(function(){
+      roster.clients=(roster.clients||[]).concat([{id:cli.id,nom:cli.nom,login:cli.login,pin:cli.pin}]);
+      return saveRoster(roster);
+    }).then(function(){ toast("Fiche créée"); screenRoster(); });
+  };
+}
+
+/* ---------- ACCUEIL CLIENTE (coach ou cliente) ---------- */
+function openClient(id, isSelf){
+  clear();
+  var loading=el("div","muted center","Chargement…"); loading.style.margin="30px 0"; app.appendChild(loading);
+  loadClient(id).then(function(c){
+    loading.remove();
+    if(!c){ toast("Fiche introuvable"); render(); return; }
+    var back = isSelf ? logout : screenRoster;
+    var t=topbar(c.nom || "Pratiquante", isSelf?"Mon espace":"Pratiquante", back);
+    if(isSelf){ var out=el("button","back"); out.textContent="Quitter"; out.onclick=logout; t.appendChild(el("div","spacer")); t.appendChild(out); }
+
+    // bonjour + phrase du jour
+    var hello=el("div"); hello.style.cssText="font-size:15px;color:var(--dim);margin:2px 0 12px";
+    hello.textContent="Bonjour "+(((c.nom||"").trim().split(" ")[0])||"")+" 👋";
+    app.appendChild(hello);
+    app.appendChild(phraseCard());
+    // bandeau progression
+    var jours=(c.joursReussis||[]).length, b=belt(jours), nb=nextBelt(jours);
+    var head=el("div","card");
+    head.innerHTML='<div class="row" style="justify-content:space-between">'
+      +'<div><div class="eyebrow">Progression</div><div style="font-size:22px;font-weight:800;margin-top:3px">'+jours+' jours</div></div>'
+      +'<span class="belt"><span class="dot" style="background:'+b.c+'"></span>Ceinture '+b.n+'</span></div>'
+      +(nb?'<div class="muted" style="font-size:12px;margin-top:9px">Prochaine : '+nb.n+' à '+nb.min+' jours ('+(nb.min-jours)+' restants)</div>':'<div class="muted" style="font-size:12px;margin-top:9px">Ceinture maximale atteinte 🎉</div>');
+    app.appendChild(head);
+
+    // accueil — tuiles premium identiques au launcher
+    var mob = window.innerWidth < 560;
+    var grid=el("div"); grid.style.cssText="display:grid;grid-template-columns:repeat(auto-fill,minmax("+(mob?104:94)+"px,1fr));gap:"+(mob?16:14)+"px;margin-top:6px";
+    var sz = mob?30:27, PW = mob?54:48;
+    function appIcon(icon,label,fn){
+      var b=el("button","exh-tile");
+      b.style.cssText="display:flex;flex-direction:column;align-items:center;gap:"+(mob?11:9)+"px;background:linear-gradient(160deg,var(--card),var(--surf));border:1px solid rgba(201,168,76,.30);border-radius:20px;padding:"+(mob?18:16)+"px 8px;cursor:pointer;color:var(--text);font-family:inherit;box-shadow:0 3px 10px rgba(0,0,0,.34), inset 0 1px 0 rgba(255,255,255,.05)";
+      var plate=el("div"); plate.style.cssText="width:"+PW+"px;height:"+PW+"px;border-radius:16px;padding:1.5px;background:linear-gradient(145deg,#F4DE9C 0%,#C9A84C 46%,#8C6826 100%);box-shadow:0 4px 11px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.35)";
+      var inner=el("div"); inner.style.cssText="width:100%;height:100%;border-radius:14.5px;display:flex;align-items:center;justify-content:center;background:radial-gradient(130% 115% at 50% 0%, #1C4231 0%, #0E2419 55%, #081310 100%);box-shadow:inset 0 -6px 11px rgba(0,0,0,.45), inset 0 1px 1px rgba(255,255,255,.06)";
+      inner.innerHTML='<svg viewBox="0 0 24 24" width="'+sz+'" height="'+sz+'" fill="none" stroke="url(#exhGold)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="filter:drop-shadow(0 0 3px rgba(248,235,194,.28)) drop-shadow(0 1px 1px rgba(0,0,0,.45))">'+(ICONS[icon]||"")+'</svg>';
+      plate.appendChild(inner);
+      var lb=el("div"); lb.textContent=label; lb.style.cssText="font-size:"+(mob?12:11)+"px;font-weight:600;text-align:center;color:var(--text);letter-spacing:.02em";
+      b.appendChild(plate); b.appendChild(lb); b.onclick=fn; grid.appendChild(b);
+    }
+    appIcon("calendar","Valider", function(){ screenProgression(c, isSelf); });
+    appIcon("chart","Mesures", function(){ screenMesures(c, isSelf); });
+    appIcon("target","Objectifs", function(){ screenObjectifs(c, isSelf); });
+    appIcon("user","Profil", function(){ screenProfil(c, isSelf); });
+    app.appendChild(grid);
+    var foot=el("div","center muted"); foot.style.cssText="margin-top:30px;font-size:11px;letter-spacing:.04em"; foot.textContent="Ex Home · v2 · 30-06"; app.appendChild(foot);
+  });
+}
+
+/* ---------- PROGRESSION ---------- */
+function screenProgression(c, isSelf){
+  clear();
+  topbar("Progression", c.nom, function(){ openClient(c.id, isSelf); });
+  var jours=(c.joursReussis||[]).length, b=belt(jours), nb=nextBelt(jours);
+  var head=el("div","card center");
+  head.innerHTML='<div class="belt" style="font-size:15px"><span class="dot" style="background:'+b.c+'"></span>Ceinture '+b.n+'</div>'
+    +'<div style="font-size:34px;font-weight:800;margin:14px 0 2px">'+jours+'</div><div class="muted">jours validés</div>'
+    +(nb?'<div class="muted" style="font-size:12px;margin-top:10px">'+(nb.min-jours)+' jours avant la ceinture '+nb.n+'</div>':'');
+  app.appendChild(head);
+
+  var done = (c.joursReussis||[]).indexOf(today())>-1;
+  var btn=el("button","btn block "+(done?"ghost":"primary"), done?"✓ Journée déjà validée":"Valider aujourd'hui");
+  btn.disabled=done;
+  btn.onclick=function(){
+    if(c.joursReussis.indexOf(today())>-1) return;
+    c.joursReussis=(c.joursReussis||[]).concat([today()]).sort();
+    btn.disabled=true; btn.textContent="Enregistrement…";
+    saveClient(c).then(function(m){ Object.assign(c,m); toast("Journée validée 💪"); screenProgression(c,isSelf); });
+  };
+  app.appendChild(btn);
+
+  // historique récent
+  if((c.joursReussis||[]).length){
+    var hist=el("div","card"); hist.appendChild(el("div","eyebrow","Derniers jours"));
+    var sp=el("div"); sp.style.height="8px"; hist.appendChild(sp);
+    c.joursReussis.slice(-12).reverse().forEach(function(d){
+      var l=el("div","line"); l.innerHTML='<span class="k">'+fmtDate(d)+'</span><span class="v" style="color:var(--ok)">validé</span>'; hist.appendChild(l);
+    });
+    app.appendChild(hist);
+  }
+}
+
+/* ---------- MESURES (source unique) ---------- */
+var MES_FIELDS = [
+  { k:"poids",        lab:"Poids",            u:"kg" },
+  { k:"graisse",      lab:"Masse grasse",     u:"%"  },
+  { k:"muscle",       lab:"Masse musculaire", u:"%"  },
+  { k:"eau",          lab:"Eau",              u:"%"  },
+  { k:"imc",          lab:"IMC",              u:""   },
+  { k:"tourTaille",   lab:"Tour de taille",   u:"cm" },
+  { k:"tourHanches",  lab:"Tour de hanches",  u:"cm" },
+  { k:"fcRepos",      lab:"FC au repos",      u:"bpm"}
+];
+function visibleMes(c){ return (c.mesures||[]).filter(function(m){ return !m.del; }).sort(function(a,b){ return (b.date||"").localeCompare(a.date||"")||((b._ts||0)-(a._ts||0)); }); }
+
+function screenMesures(c, isSelf){
+  clear();
+  topbar("Mesures", c.nom, function(){ openClient(c.id, isSelf); });
+  app.appendChild(el("div","muted","Un seul endroit pour tes mesures. Tout est synchronisé entre la pratiquante et le coach."));
+  var addBtn=el("button","btn line block","+ Ajouter une mesure"); addBtn.style.margin="14px 0";
+  addBtn.onclick=function(){ mesureForm(c, isSelf, null); };
+  app.appendChild(addBtn);
+
+  var mes=visibleMes(c);
+  if(!mes.length){ app.appendChild(el("div","card center muted","Aucune mesure pour l'instant. Ajoute la première.")); return; }
+
+  // évolution poids (première vs dernière)
+  var withPoids=mes.filter(function(m){ return m.poids!=null; });
+  if(withPoids.length>=2){
+    var last=withPoids[0], first=withPoids[withPoids.length-1], d=(last.poids-first.poids);
+    var ev=el("div","card");
+    ev.innerHTML='<div class="eyebrow">Évolution du poids</div>'
+      +'<div class="row" style="justify-content:space-between;margin-top:8px">'
+      +'<span class="muted">'+fmtDate(first.date)+' → '+fmtDate(last.date)+'</span>'
+      +'<span style="font-weight:800;color:'+(d<=0?"var(--ok)":"var(--orange)")+'">'+(d>0?"+":"")+d.toFixed(1)+' kg</span></div>';
+    app.appendChild(ev);
+  }
+
+  mes.forEach(function(m){
+    var card=el("div","card");
+    var hdr=el("div","row"); hdr.style.justifyContent="space-between"; hdr.style.marginBottom="6px";
+    hdr.innerHTML='<div style="font-weight:700">'+fmtDate(m.date)+'</div>';
+    var edit=el("button","back"); edit.textContent="Modifier"; edit.style.fontSize="12px"; edit.onclick=function(){ mesureForm(c,isSelf,m); };
+    hdr.appendChild(edit); card.appendChild(hdr);
+    var has=false;
+    MES_FIELDS.forEach(function(f){ if(m[f.k]!=null){ has=true; var l=el("div","line"); l.innerHTML='<span class="k">'+f.lab+'</span><span class="v">'+m[f.k]+(f.u?" "+f.u:"")+'</span>'; card.appendChild(l); } });
+    if(!has) card.appendChild(el("div","muted","(vide)"));
+    app.appendChild(card);
+  });
+}
+function mesureForm(c, isSelf, existing){
+  clear();
+  topbar(existing?"Modifier la mesure":"Nouvelle mesure", c.nom, function(){ screenMesures(c,isSelf); });
+  var m = existing || { id:genId(), date:today() };
+  var card=el("div","card");
+  var dateIn=input(m.date||today(), {type:"date"});
+  card.appendChild(field("Date", dateIn));
+  var grid=el("div","two");
+  var inputs={};
+  MES_FIELDS.forEach(function(f){
+    var i=input(m[f.k]==null?"":m[f.k], {type:"number", inputmode:"decimal", placeholder:f.u||""});
+    inputs[f.k]=i; grid.appendChild(field(f.lab+(f.u?" ("+f.u+")":""), i));
+  });
+  card.appendChild(grid); app.appendChild(card);
+
+  var save=el("button","btn primary block","Enregistrer"); app.appendChild(save);
+  save.onclick=function(){
+    m.date=dateIn.value||today(); m._ts=Date.now(); m.del=false;
+    MES_FIELDS.forEach(function(f){ var v=num(inputs[f.k].value); if(v==null) delete m[f.k]; else m[f.k]=v; });
+    if(!existing){ c.mesures=(c.mesures||[]).concat([m]); }
+    else { c.mesures=(c.mesures||[]).map(function(x){ return x.id===m.id ? m : x; }); }
+    save.disabled=true; save.textContent="Enregistrement…";
+    saveClient(c).then(function(mc){ Object.assign(c,mc); toast("Mesure enregistrée"); screenMesures(c,isSelf); });
+  };
+  if(existing){
+    var del=el("button","btn danger block","Supprimer cette mesure"); del.style.marginTop="10px";
+    del.onclick=function(){
+      var x=(c.mesures||[]).filter(function(y){return y.id===m.id;})[0];
+      if(x){ x.del=true; x._ts=Date.now(); }
+      saveClient(c).then(function(mc){ Object.assign(c,mc); toast("Mesure supprimée"); screenMesures(c,isSelf); });
+    };
+    app.appendChild(del);
+  }
+}
+
+/* ---------- OBJECTIFS ---------- */
+function screenObjectifs(c, isSelf){
+  clear();
+  topbar("Objectifs", c.nom, function(){ openClient(c.id, isSelf); });
+  var addCard=el("div","card");
+  var ni=input("",{placeholder:"Nouvel objectif (ex : bouger 10 min/jour)"});
+  var add=el("button","btn primary block","Ajouter"); add.style.marginTop="4px";
+  addCard.appendChild(field("Ajouter un objectif", ni)); addCard.appendChild(add); app.appendChild(addCard);
+  add.onclick=function(){
+    var v=(ni.value||"").trim(); if(!v) return;
+    c.objectifs=(c.objectifs||[]).concat([{ id:genId(), texte:v, fait:false, _ts:Date.now() }]);
+    saveClient(c).then(function(mc){ Object.assign(c,mc); screenObjectifs(c,isSelf); });
+  };
+  var objs=(c.objectifs||[]).filter(function(o){return !o.del;});
+  if(!objs.length){ app.appendChild(el("div","card center muted","Aucun objectif pour l'instant.")); return; }
+  var list=el("div","card");
+  objs.forEach(function(o,i){
+    var row=el("div","line"); row.style.cursor="pointer";
+    row.innerHTML='<span class="k" style="color:'+(o.fait?"var(--ok)":"var(--text)")+';text-decoration:'+(o.fait?"line-through":"none")+'">'+(o.fait?"✓ ":"○ ")+esc(o.texte)+'</span>';
+    var x=el("button","back"); x.textContent="✕"; x.style.fontSize="12px"; x.style.padding="4px 9px";
+    x.onclick=function(e){ e.stopPropagation(); o.del=true; o._ts=Date.now(); saveClient(c).then(function(mc){ Object.assign(c,mc); screenObjectifs(c,isSelf); }); };
+    row.appendChild(x);
+    row.onclick=function(){ o.fait=!o.fait; o._ts=Date.now(); saveClient(c).then(function(mc){ Object.assign(c,mc); screenObjectifs(c,isSelf); }); };
+    list.appendChild(row);
+  });
+  app.appendChild(list);
+}
+
+/* ---------- PROFIL ---------- */
+function screenProfil(c, isSelf){
+  clear();
+  topbar("Profil", c.nom, function(){ openClient(c.id, isSelf); });
+  var card=el("div","card");
+  var nom=input(c.nom,{placeholder:"Nom"});
+  var age=input(c.profil&&c.profil.age,{type:"number",inputmode:"numeric",placeholder:"ans"});
+  var taille=input(c.profil&&c.profil.taille,{type:"number",inputmode:"numeric",placeholder:"cm"});
+  var niveau=el("select","inp");
+  ["","Débutante","Intermédiaire","Avancée"].forEach(function(o){ var op=document.createElement("option"); op.value=o; op.textContent=o||"Niveau…"; if((c.profil&&c.profil.niveau)===o) op.selected=true; niveau.appendChild(op); });
+  var dateDeb=input((c.dateDebut||"").slice(0,10),{type:"date"});
+  var objectif=input(c.objectifText,{placeholder:"Objectif principal"});
+
+  card.appendChild(field("Nom", nom));
+  var two=el("div","two"); two.appendChild(field("Âge", age)); two.appendChild(field("Taille (cm)", taille)); card.appendChild(two);
+  card.appendChild(field("Niveau", niveau));
+  card.appendChild(field("Date de début", dateDeb));
+  card.appendChild(field("Objectif principal", objectif));
+  app.appendChild(card);
+
+  // identifiants (coach seulement)
+  if(!isSelf){
+    var idc=el("div","card flat");
+    idc.appendChild(el("div","eyebrow","Accès de la pratiquante"));
+    var sp=el("div"); sp.style.height="10px"; idc.appendChild(sp);
+    var login=input(c.login,{autocapitalize:"none"}); var pin=input(c.pin,{});
+    idc.appendChild(field("Identifiant", login)); idc.appendChild(field("Code", pin));
+    app.appendChild(idc);
+  }
+
+  var save=el("button","btn primary block","Enregistrer le profil"); app.appendChild(save);
+  save.onclick=function(){
+    c.nom=(nom.value||"").trim()||c.nom;
+    c.profil=c.profil||{}; c.profil.age=age.value; c.profil.taille=taille.value; c.profil.niveau=niveau.value;
+    c.dateDebut=dateDeb.value||c.dateDebut; c.objectifText=objectif.value;
+    if(!isSelf){ c.login=(login.value||c.login).trim(); c.pin=(pin.value||c.pin).trim(); }
+    save.disabled=true; save.textContent="Enregistrement…";
+    saveClient(c).then(function(mc){
+      Object.assign(c,mc);
+      // tenir le roster à jour (nom/login/pin)
+      if(!isSelf){ loadRoster().then(function(r){
+        r.clients=(r.clients||[]).map(function(x){ return x.id===c.id ? {id:c.id,nom:c.nom,login:c.login,pin:c.pin} : x; });
+        saveRoster(r);
+      }); }
+      toast("Profil enregistré"); screenProfil(c,isSelf);
+    });
+  };
+}
+
+/* ---------- démarrage ---------- */
+render();
+</script>
+</body>
+</html>
