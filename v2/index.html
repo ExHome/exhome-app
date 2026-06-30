@@ -135,7 +135,7 @@ var syncT;
 function setSync(msg){ var e=document.getElementById("sync"); if(!e) return; e.textContent=msg; e.style.display="block";
   clearTimeout(syncT); syncT=setTimeout(function(){ e.style.display="none"; }, 2600); }
 
-var APP_VERSION = "build 22 · 30 juin";
+var APP_VERSION = "build 24 · 30 juin";
 
 /* ---------- localStorage ---------- */
 function readLS(k){ try{ return JSON.parse(localStorage.getItem(k)); }catch(e){ return null; } }
@@ -470,7 +470,9 @@ function openClient(id, isSelf){
       +'<div><div class="eyebrow">Progression</div><div style="font-size:22px;font-weight:800;margin-top:3px">'+jours+' jours</div></div>'
       +'<span class="belt"><span class="dot" style="background:'+b.c+'"></span>Ceinture '+b.n+'</span></div>'
       +(nb?'<div class="muted" style="font-size:12px;margin-top:9px">Prochaine : '+nb.n+' à '+nb.min+' jours ('+(nb.min-jours)+' restants)</div>':'<div class="muted" style="font-size:12px;margin-top:9px">Ceinture maximale atteinte 🎉</div>');
+    head.style.cursor="pointer"; head.onclick=function(){ screenProgression(c,isSelf); };
     app.appendChild(head);
+    app.appendChild(homeErgo(c, isSelf));
     app.appendChild(scienceCard(function(){ openPresentation(function(){ openClient(c.id,isSelf); }); }));
 
     // accueil — tuiles premium identiques au launcher
@@ -1635,67 +1637,150 @@ function openScan(c, isSelf){
 }
 
 /* ===================== Audit découverte (ergo + nutrition) ===================== */
+var AUDIT_SCHEMA=[
+ {t:"1 · Identité", f:[
+   ["profession","Profession / activité","Ex : Infirmière, Commerciale…"],
+   ["situationFamiliale","Situation familiale","Seul·e, en couple…"],
+   ["enfants","Enfants (âges)","Ex : 3, 7, 12 ans"],
+   ["telephone","Téléphone","+33 6…"],
+   ["email","Email","prenom@email.fr"],
+   ["contexte","Contexte de vie","Domicile, rythme, contraintes…",true],
+   ["aide","Aide à domicile","Femme de ménage, aide…"]
+ ]},
+ {t:"2 · Objectifs & motivations", f:[
+   ["objPrincipal","Objectif principal",""],
+   ["objMots","Objectif formulé par la personne (ses mots)","Ce que la personne souhaite améliorer…",true],
+   ["obj1mois","Objectif 1 mois",""],
+   ["obj3mois","Objectif 3 mois",""],
+   ["obj6mois","Objectif 6 mois",""],
+   ["transformation","Transformation visée","Transformation espérée…"],
+   ["ressenti","Ressenti souhaité","Ressenti souhaité…"],
+   ["echeance","Échéance / motivation immédiate","Ex : mariage en juin…"],
+   ["freins","Freins / obstacles","Ex : manque de temps…",true]
+ ]},
+ {t:"3 · Antécédents & pathologies", f:[
+   ["antecedents","Suivi médical / antécédents","Médicaments, kiné, ostéo…",true],
+   ["limitations","Limitations / précautions","Ex : Lombaires fragiles, éviter flexions…",true],
+   ["douleur","Difficulté / douleur actuelle",""]
+ ]},
+ {t:"4 · Sédentarité & activité physique", f:[
+   ["sedentarite","Niveau de sédentarité global",""],
+   ["activiteActuelle","Activité physique actuelle","Ex : Marche consciente 10 min"],
+   ["activiteObs","Observations","",true]
+ ]},
+ {t:"5 · Habitudes & tâches ménagères — inventaire ergo", f:[
+   ["taches","Tâches du quotidien","Ex : Repasser le linge en gainage…",true],
+   ["obsModeVie","Observations sur le mode de vie","",true]
+ ]},
+ {t:"6 · Mesures corporelles", note:"Les mesures (poids, masse grasse, muscle, eau…) se saisissent dans Mesures / Scan balance et alimentent le tableau de bord.", f:[
+   ["mesuresObs","Observations / conditions de mesure","Observations, conditions de mesure…",true]
+ ]},
+ {t:"7 · Bilan postural & observations ergoptimiste", f:[
+   ["posture","Posture & alignement",""],
+   ["obsPosture","Observations posturales détaillées","",true],
+   ["tensions","Zones de tension, compensations, asymétries","Zones de tension, compensations, asymétries…",true],
+   ["niveauAttribue","Niveau attribué",""],
+   ["frequence","Fréquence recommandée",""],
+   ["priorites","Priorités pour la personne","Priorités pour la personne…",true],
+   ["recommandations","Recommandations prioritaires","",true]
+ ]},
+ {t:"8 · Bilan nutritionnel", f:[
+   ["nutHabitudes","Habitudes alimentaires","Repas, horaires, équilibre…",true],
+   ["nutGrignotage","Grignotage / sucre","Ex : pas de sucre dans le café…"],
+   ["nutHydratation","Hydratation","Eau / jour, boissons…"],
+   ["nutObjectifs","Objectifs nutritionnels","",true]
+ ]}
+];
+
+function signaturePad(initial){
+  var box=el("div"); box.style.cssText="border:1px solid var(--border);border-radius:12px;background:#0c1f17;overflow:hidden";
+  var cv=document.createElement("canvas"); cv.style.cssText="width:100%;height:130px;display:block;touch-action:none;cursor:crosshair"; box.appendChild(cv);
+  var ctx=cv.getContext("2d"); var drawing=false,last=null,dirty=false;
+  function fit(){ var r=cv.getBoundingClientRect(); cv.width=Math.max(260,r.width|0); cv.height=130; ctx.lineWidth=2.2; ctx.lineCap="round"; ctx.lineJoin="round"; ctx.strokeStyle="#F5F0E8"; if(initial){ var img=new Image(); img.onload=function(){ ctx.drawImage(img,0,0,cv.width,cv.height); }; img.src=initial; } }
+  function pos(e){ var r=cv.getBoundingClientRect(); var t=(e.touches&&e.touches[0])?e.touches[0]:e; return {x:(t.clientX-r.left)*(cv.width/r.width), y:(t.clientY-r.top)*(cv.height/r.height)}; }
+  function start(e){ drawing=true; last=pos(e); e.preventDefault(); }
+  function move(e){ if(!drawing)return; var p=pos(e); ctx.beginPath(); ctx.moveTo(last.x,last.y); ctx.lineTo(p.x,p.y); ctx.stroke(); last=p; dirty=true; e.preventDefault(); }
+  function end(){ drawing=false; }
+  cv.addEventListener("mousedown",start); cv.addEventListener("mousemove",move); window.addEventListener("mouseup",end);
+  cv.addEventListener("touchstart",start,{passive:false}); cv.addEventListener("touchmove",move,{passive:false}); cv.addEventListener("touchend",end);
+  setTimeout(fit,40);
+  return { el:box, clear:function(){ ctx.clearRect(0,0,cv.width,cv.height); dirty=false; }, data:function(){ return dirty? cv.toDataURL("image/png") : (initial||""); } };
+}
+
+function printAudit(c){
+  var a=c.audit||{};
+  var H='<html><head><meta charset="utf-8"><title>Audit découverte — '+esc(c.nom||"")+'</title>';
+  H+='<style>body{font-family:Georgia,serif;color:#14241c;max-width:720px;margin:24px auto;padding:0 20px;line-height:1.5}h1{color:#0F2820;font-size:22px;margin:0 0 2px}.sub{color:#777;font-size:11px;text-transform:uppercase;letter-spacing:.07em;margin-bottom:18px}h2{color:#1B4D3E;font-size:15px;border-bottom:2px solid #C9A84C;padding-bottom:4px;margin:22px 0 8px}.f{margin:7px 0}.k{font-weight:bold;color:#0F2820;font-size:12.5px}.v{white-space:pre-wrap;font-size:14px}.rgpd{background:#f0f7f0;border:1px solid #1B4D3E;border-radius:6px;padding:12px;font-size:12px;margin:14px 0}.sigs{display:flex;gap:24px;margin-top:18px}.sig{flex:1}.sig .lbl{color:#888;font-size:12px;margin-bottom:6px}.sig img{width:100%;height:110px;object-fit:contain;border:1px solid #ccc;border-radius:6px}.empty{height:110px;border:1px solid #ccc;border-radius:6px}@media print{button{display:none}}</style></head><body>';
+  H+='<h1>Audit découverte — '+esc(c.nom||"")+'</h1>';
+  H+='<div class="sub">Ex Home · Document confidentiel · RGPD · Usage exclusif</div>';
+  AUDIT_SCHEMA.forEach(function(S){
+    var rows="";
+    S.f.forEach(function(f){ var val=a[f[0]]; if(val){ rows+='<div class="f"><div class="k">'+esc(f[1])+'</div><div class="v">'+esc(val)+'</div></div>'; } });
+    if(rows){ H+='<h2>'+esc(S.t)+'</h2>'+rows; }
+  });
+  H+='<h2>RGPD, consentement & signatures</h2>';
+  H+='<div class="rgpd">Les informations recueillies sont strictement confidentielles et destinées au seul suivi Ex Home. Elles ne constituent pas un avis médical. Conformément au RGPD, la personne dispose d\'un droit d\'accès, de rectification et de suppression de ses données.</div>';
+  H+='<div class="f"><div class="k">Consentement RGPD</div><div class="v">'+(a.rgpd?"Accordé ✔":"Non renseigné")+'</div></div>';
+  if(a.consentement) H+='<div class="f"><div class="k">Remarques</div><div class="v">'+esc(a.consentement)+'</div></div>';
+  H+='<div class="f"><div class="k">Date de signature</div><div class="v">'+esc(a.dateSignature||"—")+'</div></div>';
+  H+='<div class="sigs"><div class="sig"><div class="lbl">Signature de la personne</div>'+(a.sigClient?'<img src="'+a.sigClient+'">':'<div class="empty"></div>')+'</div>';
+  H+='<div class="sig"><div class="lbl">Signature de l\'ergoptimiste</div>'+(a.sigCoach?'<img src="'+a.sigCoach+'">':'<div class="empty"></div>')+'</div></div>';
+  H+='<p style="margin-top:24px"><button onclick="window.print()" style="padding:10px 18px;font-size:14px;background:#0F2820;color:#fff;border:none;border-radius:6px;cursor:pointer">Imprimer / Enregistrer en PDF</button></p>';
+  H+='</body></html>';
+  var w=window.open("","_blank");
+  if(!w){ toast("Autorise les pop-ups pour l'export PDF"); return; }
+  w.document.write(H); w.document.close();
+  setTimeout(function(){ try{ w.focus(); w.print(); }catch(e){} }, 500);
+}
+
 function openAudit(c, isSelf){
   clear(); topbar("Audit découverte", c.nom, function(){ openClient(c.id,isSelf); });
   var coach=isCoach(); c.audit=c.audit||{};
+  var top=el("div","muted"); top.style.cssText="font-size:11px;letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px"; top.textContent="Document confidentiel · RGPD · Usage exclusif Ex Home"; app.appendChild(top);
   app.appendChild(el("div","muted", coach? "Audit découverte — ergoptimisation & nutrition. Le bilan nutritionnel nourrit cet audit." : "Ton audit découverte, défini avec ton coach."));
   var fields={};
   function sec(t){ var card=el("div","card"); card.appendChild(el("div","eyebrow",t)); var sp=el("div"); sp.style.height="10px"; card.appendChild(sp); app.appendChild(card); return card; }
   function add(card,key,label,ph,multi){ var i= multi? textarea(c.audit[key],ph) : input(c.audit[key],{placeholder:ph||""}); if(!coach){ i.disabled=true; i.style.opacity=".85"; } fields[key]=i; card.appendChild(field(label,i)); }
+  AUDIT_SCHEMA.forEach(function(S){
+    var card=sec(S.t);
+    if(S.note){ var n=el("div","muted"); n.style.cssText="font-size:13px;line-height:1.5;margin-bottom:8px"; n.textContent=S.note; card.appendChild(n);
+      var go=el("button","btn ghost","Ouvrir les mesures"); go.style.margin="0 0 12px"; go.onclick=function(){ screenMesures(c,isSelf); }; card.appendChild(go); }
+    S.f.forEach(function(f){ add(card, f[0], f[1], f[2]||"", f[3]||false); });
+  });
 
-  var s1=sec("1 · Identité du client");
-  add(s1,"profession","Profession / activité","Ex : Infirmière, Commerciale…");
-  add(s1,"situationFamiliale","Situation familiale","Seul·e, en couple, enfants…");
-  add(s1,"contexte","Contexte de vie","Domicile, rythme, contraintes…");
-  add(s1,"aide","Aide à domicile","Femme de ménage, aide…");
+  var rg=sec("9 · RGPD, consentement & signatures");
+  var legal=el("div"); legal.style.cssText="font-size:12.5px;line-height:1.6;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:10px;padding:11px;margin-bottom:12px";
+  legal.textContent="Les informations recueillies sont strictement confidentielles et destinées au seul suivi Ex Home. Elles ne constituent pas un avis médical. Conformément au RGPD, la personne dispose d'un droit d'accès, de rectification et de suppression de ses données, exerçable auprès d'Ex Home.";
+  rg.appendChild(legal);
+  var rgpdWrap=el("label"); rgpdWrap.style.cssText="display:flex;gap:9px;align-items:flex-start;font-size:13px;line-height:1.45;cursor:pointer;margin-bottom:12px";
+  var rgpdChk=document.createElement("input"); rgpdChk.type="checkbox"; rgpdChk.checked=!!c.audit.rgpd; rgpdChk.style.cssText="width:18px;height:18px;flex-shrink:0;margin-top:1px;accent-color:var(--gold)"; if(!coach) rgpdChk.disabled=true;
+  var rgpdTxt=el("span"); rgpdTxt.textContent="La personne reconnaît avoir été informée et consent au traitement de ses données dans le cadre du suivi Ex Home.";
+  rgpdWrap.appendChild(rgpdChk); rgpdWrap.appendChild(rgpdTxt); rg.appendChild(rgpdWrap);
+  add(rg,"consentement","Remarques / consentement particulier","Accord photos, partage…",true);
+  var dateInp=input(c.audit.dateSignature||new Date().toLocaleDateString("fr-FR"),{placeholder:"Date"}); if(!coach) dateInp.disabled=true; rg.appendChild(field("Date de signature", dateInp));
 
-  var s2=sec("2 · Objectifs & motivations");
-  add(s2,"objPrincipal","Objectif principal","");
-  add(s2,"objMots","Objectif formulé par la personne (ses mots)",null,true);
-  add(s2,"obj1mois","Objectif 1 mois","");
-  add(s2,"obj3mois","Objectif 3 mois","");
-  add(s2,"obj6mois","Objectif 6 mois","");
-  add(s2,"ressenti","Ressenti souhaité","");
-  add(s2,"echeance","Échéance / motivation immédiate","Ex : mariage en juin…");
-  add(s2,"freins","Freins / obstacles","Ex : manque de temps…",true);
+  function sigLabel(t){ var d=el("div","muted"); d.style.cssText="font-size:12px;margin:8px 0 6px"; d.textContent=t; return d; }
+  var sigC=null, sigK=null;
+  if(coach){
+    rg.appendChild(sigLabel("Signature de la personne (pratiquant·e)"));
+    sigC=signaturePad(c.audit.sigClient); rg.appendChild(sigC.el);
+    var clrC=el("button","btn ghost","Effacer"); clrC.style.margin="6px 0 6px"; clrC.onclick=function(){ sigC.clear(); }; rg.appendChild(clrC);
+    rg.appendChild(sigLabel("Signature de l'ergoptimiste (coach)"));
+    sigK=signaturePad(c.audit.sigCoach); rg.appendChild(sigK.el);
+    var clrK=el("button","btn ghost","Effacer"); clrK.style.margin="6px 0 2px"; clrK.onclick=function(){ sigK.clear(); }; rg.appendChild(clrK);
+  } else {
+    [["Signature de la personne",c.audit.sigClient],["Signature de l'ergoptimiste",c.audit.sigCoach]].forEach(function(p){
+      rg.appendChild(sigLabel(p[0]));
+      if(p[1]){ var im=document.createElement("img"); im.src=p[1]; im.style.cssText="width:100%;max-height:130px;object-fit:contain;background:#0c1f17;border:1px solid var(--border);border-radius:12px"; rg.appendChild(im); }
+      else { var no=el("div","muted"); no.style.cssText="font-size:12px"; no.textContent="—"; rg.appendChild(no); }
+    });
+  }
 
-  var s3=sec("3 · Antécédents & pathologies");
-  add(s3,"antecedents","Suivi médical / antécédents","Médicaments, kiné, ostéo…",true);
-  add(s3,"limitations","Limitations / précautions","Ex : Lombaires fragiles, éviter flexions…",true);
-
-  var s4=sec("4 · Sédentarité & activité physique");
-  add(s4,"sedentarite","Niveau de sédentarité global","");
-  add(s4,"activiteActuelle","Activité physique actuelle","");
-  add(s4,"activiteObs","Observations",null,true);
-
-  var s5=sec("5 · Habitudes & tâches ménagères — inventaire ergo");
-  add(s5,"taches","Tâches du quotidien","Ex : Repasser le linge en gainage…",true);
-  add(s5,"obsModeVie","Observations sur le mode de vie",null,true);
-
-  var s6=sec("6 · Mesures corporelles");
-  var note=el("div","muted"); note.style.cssText="font-size:13px;line-height:1.5"; note.textContent="Les mesures (poids, masse grasse, muscle, eau…) se saisissent dans Mesures / Scan balance et alimentent automatiquement le tableau de bord.";
-  s6.appendChild(note);
-  var goM=el("button","btn ghost","Ouvrir les mesures"); goM.style.marginTop="10px"; goM.onclick=function(){ screenMesures(c,isSelf); }; s6.appendChild(goM);
-
-  var s7=sec("7 · Bilan postural & observations ergoptimiste");
-  add(s7,"posture","Posture & alignement","");
-  add(s7,"obsPosture","Observations posturales détaillées",null,true);
-  add(s7,"tensions","Zones de tension, compensations, asymétries",null,true);
-  add(s7,"niveauAttribue","Niveau attribué","");
-  add(s7,"frequence","Fréquence recommandée","");
-  add(s7,"priorites","Priorités pour la personne",null,true);
-  add(s7,"recommandations","Recommandations prioritaires",null,true);
-
-  var s8=sec("8 · Bilan nutritionnel");
-  add(s8,"nutHabitudes","Habitudes alimentaires","Repas, horaires, équilibre…",true);
-  add(s8,"nutGrignotage","Grignotage / sucre","Ex : pas de sucre dans le café…");
-  add(s8,"nutHydratation","Hydratation","Eau / jour, boissons…");
-  add(s8,"nutObjectifs","Objectifs nutritionnels",null,true);
-
-  var s9=sec("9 · Consentement");
-  add(s9,"consentement","Consentement & remarques","Accord pour le suivi, les données, les photos…",true);
-
-  if(coach){ var save=el("button","btn primary block","Enregistrer l'audit découverte"); app.appendChild(save); save.onclick=function(){ Object.keys(fields).forEach(function(k){ c.audit[k]=fields[k].value; }); c.audit._ts=Date.now(); save.disabled=true; save.textContent="Enregistrement…"; saveClient(c).then(function(m){Object.assign(c,m); toast("Audit découverte enregistré"); openClient(c.id,isSelf);}); }; }
+  if(coach){
+    var save=el("button","btn primary block","Enregistrer l'audit découverte"); app.appendChild(save);
+    save.onclick=function(){ Object.keys(fields).forEach(function(k){ c.audit[k]=fields[k].value; }); c.audit.rgpd=rgpdChk.checked; c.audit.dateSignature=dateInp.value; if(sigC) c.audit.sigClient=sigC.data(); if(sigK) c.audit.sigCoach=sigK.data(); c.audit._ts=Date.now(); save.disabled=true; save.textContent="Enregistrement…"; saveClient(c).then(function(m){Object.assign(c,m); toast("Audit découverte enregistré"); openAudit(c,isSelf);}); };
+  }
+  var pdf=el("button","btn line block","🖨️ Imprimer / Télécharger en PDF"); pdf.style.marginTop="10px"; pdf.onclick=function(){ printAudit(c); }; app.appendChild(pdf);
 }
 
 /* ===================== Présentation Ex Home ===================== */
@@ -1831,8 +1916,52 @@ function scienceCard(onMore){
   return c;
 }
 
+function homeErgo(c, isSelf){
+  c.ergoSquat=c.ergoSquat||{}; c.ergoFente=c.ergoFente||{}; c.ergoHinge=c.ergoHinge||{}; c.ergoEtages=c.ergoEtages||{};
+  var GOAL=30;
+  var T=[{k:"ergoSquat",lab:"Squat",emoji:"🦵",col:"#C9A84C"},{k:"ergoFente",lab:"Fente",emoji:"🏃",col:"#7EC8A0"},{k:"ergoHinge",lab:"Hinge",emoji:"🔄",col:"#6FCF97"}];
+  var card=el("div","card");
+  card.appendChild(el("div","eyebrow","Mes mouvements du jour"));
+  var totEl=el("div"); totEl.style.cssText="font-size:40px;font-weight:800;color:var(--gold);text-align:center;margin:6px 0 0;transition:transform .15s"; card.appendChild(totEl);
+  var subEl=el("div","muted"); subEl.style.cssText="font-size:12px;text-align:center"; subEl.textContent="ramassages aujourd'hui · objectif "+GOAL; card.appendChild(subEl);
+  var bw=el("div"); bw.style.cssText="height:9px;border-radius:9px;background:var(--surf);margin:12px 0 4px;overflow:hidden"; var fl=el("div"); fl.style.cssText="height:100%;width:0;background:linear-gradient(90deg,var(--gold),var(--ok));transition:width .4s ease"; bw.appendChild(fl); card.appendChild(bw);
+  var msgEl=el("div","muted"); msgEl.style.cssText="font-size:12px;text-align:center;min-height:16px;margin-bottom:12px"; card.appendChild(msgEl);
+  var grid=el("div"); grid.style.cssText="display:grid;grid-template-columns:repeat(3,1fr);gap:10px"; card.appendChild(grid);
+  var countEls={};
+  function refresh(){
+    var n=ergoDay(c,today());
+    totEl.textContent=n;
+    fl.style.width=Math.min(100,n/GOAL*100)+"%";
+    if(n===0) msgEl.textContent="C'est parti — chaque geste compte ! 🌿";
+    else if(n<GOAL) msgEl.textContent="Encore "+(GOAL-n)+" pour l'objectif 💪";
+    else msgEl.textContent="✓ Objectif atteint, bravo ! 🎉";
+    T.forEach(function(t){ if(countEls[t.k]) countEls[t.k].textContent=(c[t.k][today()]||0); });
+  }
+  T.forEach(function(t){
+    var b=el("button"); b.style.cssText="display:flex;flex-direction:column;align-items:center;gap:2px;background:linear-gradient(150deg,#10301F,#0A1A12);border:1px solid "+t.col+";border-radius:16px;padding:12px 6px;cursor:pointer;color:var(--text);font-family:inherit;transition:transform .1s ease";
+    var em=el("div"); em.style.cssText="font-size:23px"; em.textContent=t.emoji;
+    var cnt=el("div"); cnt.style.cssText="font-size:20px;font-weight:800;color:"+t.col; cnt.textContent=(c[t.k][today()]||0); countEls[t.k]=cnt;
+    var lb=el("div"); lb.style.cssText="font-size:11px;font-weight:600;opacity:.85"; lb.textContent="+1 "+t.lab;
+    b.appendChild(em); b.appendChild(cnt); b.appendChild(lb);
+    b.onclick=function(){
+      c[t.k][today()]=(c[t.k][today()]||0)+1;
+      b.style.transform="scale(.9)"; setTimeout(function(){ b.style.transform="scale(1)"; },110);
+      totEl.style.transform="scale(1.18)"; setTimeout(function(){ totEl.style.transform="scale(1)"; },150);
+      var reached = ergoDay(c,today())===GOAL;
+      refresh();
+      if(reached) toast("🎉 Objectif du jour atteint !");
+      saveClient(c).then(function(m){ Object.assign(c,m); refresh(); });
+    };
+    grid.appendChild(b);
+  });
+  var link=el("button","btn ghost block","Détail : étages, semaine, corrections"); link.style.marginTop="12px"; link.onclick=function(){ screenCompteur(c,isSelf); }; card.appendChild(link);
+  refresh();
+  return card;
+}
+
 /* ---------- démarrage ---------- */
 render();
 </script>
 </body>
 </html>
+
