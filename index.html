@@ -440,7 +440,7 @@ react-dom/cjs/react-dom-client.production.js:
 
   /* ---------- SCAN (Route A) ---------- */
   function openScan(clientId, back) {
-    var box = overlay(); header(box, "📷 Scanner une mesure", back); var __nm = (findClient(id) || {}).nom; if (__nm) { var __s = document.createElement("div"); __s.style.cssText = "font-size:12px;color:" + C.gold + ";font-weight:700;margin:-4px 0 12px"; __s.textContent = "Cliente : " + __nm; box.appendChild(__s); }
+    var box = overlay(); header(box, "📷 Scanner une mesure", back); var __nm = (findClient(clientId) || {}).nom; if (__nm) { var __s = document.createElement("div"); __s.style.cssText = "font-size:12px;color:" + C.gold + ";font-weight:700;margin:-4px 0 12px"; __s.textContent = "Cliente : " + __nm; box.appendChild(__s); }
     var intro = document.createElement("div"); intro.style.cssText = "font-size:12px;color:" + C.dim + ";margin-bottom:12px";
     intro.textContent = "Importe une capture d'écran nette (balance, Apple Santé, étiquette…) ou prends une photo. Les chiffres sont lus automatiquement — tu vérifies, puis tu valides.";
     box.appendChild(intro);
@@ -1225,7 +1225,7 @@ react-dom/cjs/react-dom-client.production.js:
     box.appendChild(grid);
     var ver = document.createElement("div");
     ver.style.cssText = "text-align:center;font-size:11px;color:" + C.dim + ";margin-top:16px;opacity:.8";
-    ver.textContent = "Ex Home · interface v29 (29-06)";
+    ver.textContent = "Ex Home · interface v31 (29-06)";
     box.appendChild(ver);
   }
   /* ===================== Bibliothèque alimentaire partagée v24 ===================== */
@@ -1889,8 +1889,9 @@ react-dom/cjs/react-dom-client.production.js:
     var stage = document.createElement("div"); stage.style.cssText = "position:relative;width:100%;margin-bottom:12px"; box.appendChild(stage);
     var canvas = document.createElement("canvas"); canvas.style.cssText = "width:100%;border-radius:12px;border:1px solid " + C.border + ";display:none"; stage.appendChild(canvas);
     var fbEl = document.createElement("div"); box.appendChild(fbEl);
-    var live = { on: false, stream: null, raf: 0, video: null, last: 0 };
-    function stopLive() { live.on = false; if (live.raf) cancelAnimationFrame(live.raf); if (live.stream) { live.stream.getTracks().forEach(function (t) { t.stop(); }); live.stream = null; } }
+    var live = { on: false, stream: null, raf: 0, video: null, last: 0, facing: "environment", det: null };
+    function stopTracks() { if (live.raf) { cancelAnimationFrame(live.raf); live.raf = 0; } if (live.stream) { live.stream.getTracks().forEach(function (t) { t.stop(); }); live.stream = null; } }
+    function stopLive() { live.on = false; stopTracks(); if (typeof flipBtn !== "undefined" && flipBtn) flipBtn.style.display = "none"; if (typeof bLive !== "undefined" && bLive) bLive.textContent = "🎥 Caméra en direct"; }
     var mo = new MutationObserver(function () { if (!document.getElementById("exh-ov")) { stopLive(); mo.disconnect(); } });
     mo.observe(document.body, { childList: true });
 
@@ -1912,31 +1913,42 @@ react-dom/cjs/react-dom-client.production.js:
         }).catch(function () { status.innerHTML = '<span style="color:#E07060">Modèle indisponible (connexion requise au 1er chargement).</span>'; });
       }; img.src = URL.createObjectURL(file);
     };
-    bLive.onclick = function () {
-      if (live.on) { stopLive(); bLive.textContent = "🎥 Caméra en direct"; status.textContent = ""; return; }
-      status.textContent = "Démarrage caméra + modèle…";
-      ensurePose().then(function (det) {
-        return navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } }).then(function (stream) {
-          live.stream = stream; live.on = true; bLive.textContent = "⏹ Arrêter";
-          var v = document.createElement("video"); v.playsInline = true; v.muted = true; v.srcObject = stream; live.video = v;
-          v.onloadedmetadata = function () {
-            v.play(); canvas.style.display = "block";
-            var vw = v.videoWidth || 480, vh = v.videoHeight || 640; var W = Math.min(360, vw); var H = vh * W / vw;
-            canvas.width = W; canvas.height = H; var ctx = canvas.getContext("2d"); status.textContent = "En direct";
-            function loop(ts) {
-              if (!live.on || !document.body.contains(canvas)) { stopLive(); return; }
-              live.raf = requestAnimationFrame(loop);
-              if (ts - live.last < 120) return; live.last = ts;
-              ctx.drawImage(v, 0, 0, W, H);
-              det.estimatePoses(v).then(function (poses) {
-                if (!live.on) return; ctx.drawImage(v, 0, 0, W, H);
-                if (poses && poses.length) { drawSkeleton(ctx, poses[0], W / vw, H / vh); renderFeedback(fbEl, analyzePosture(poses[0], ex)); }
-              }).catch(function () {});
-            }
+    var flipBtn = document.createElement("button"); flipBtn.textContent = "🔄 Retourner la caméra"; flipBtn.style.cssText = "display:none;width:100%;padding:10px;margin-bottom:10px;border:1px solid " + C.border + ";border-radius:10px;background:" + C.card + ";color:" + C.text + ";font-weight:600;font-size:12px;cursor:pointer;font-family:inherit"; box.insertBefore(flipBtn, stage);
+    function startCamera() {
+      status.textContent = "Démarrage caméra…";
+      return navigator.mediaDevices.getUserMedia({ video: { facingMode: live.facing } }).then(function (stream) {
+        live.stream = stream; live.on = true; bLive.textContent = "⏹ Arrêter"; flipBtn.style.display = "block";
+        var v = document.createElement("video"); v.playsInline = true; v.muted = true; v.srcObject = stream; live.video = v;
+        v.onloadedmetadata = function () {
+          v.play(); canvas.style.display = "block";
+          var vw = v.videoWidth || 480, vh = v.videoHeight || 640; var W = Math.min(360, vw); var H = vh * W / vw;
+          canvas.width = W; canvas.height = H; var ctx = canvas.getContext("2d"); status.textContent = "En direct";
+          if (live.raf) cancelAnimationFrame(live.raf);
+          function loop(ts) {
+            if (!live.on || !document.body.contains(canvas)) { stopLive(); return; }
             live.raf = requestAnimationFrame(loop);
-          };
-        });
-      }).catch(function () { status.innerHTML = '<span style="color:#E07060">Caméra ou modèle indisponible (autorise la caméra, connexion requise au 1er chargement).</span>'; });
+            if (ts - live.last < 120) return; live.last = ts;
+            ctx.drawImage(v, 0, 0, W, H);
+            live.det.estimatePoses(v).then(function (poses) {
+              if (!live.on) return; ctx.drawImage(v, 0, 0, W, H);
+              if (poses && poses.length) { drawSkeleton(ctx, poses[0], W / vw, H / vh); renderFeedback(fbEl, analyzePosture(poses[0], ex)); }
+            }).catch(function () {});
+          }
+          live.raf = requestAnimationFrame(loop);
+        };
+      });
+    }
+    bLive.onclick = function () {
+      if (live.on) { stopLive(); status.textContent = ""; return; }
+      status.textContent = "Démarrage caméra + modèle…";
+      ensurePose().then(function (det) { live.det = det; return startCamera(); })
+        .catch(function () { status.innerHTML = '<span style="color:#E07060">Caméra ou modèle indisponible (autorise la caméra, connexion requise au 1er chargement).</span>'; });
+    };
+    flipBtn.onclick = function () {
+      if (!live.on) return;
+      live.facing = live.facing === "environment" ? "user" : "environment";
+      stopTracks();
+      startCamera().catch(function () { status.innerHTML = '<span style="color:#E07060">Impossible de basculer la caméra.</span>'; });
     };
   }
   /* ===================== Journal alimentaire (relié à la bibliothèque) v29 ===================== */
