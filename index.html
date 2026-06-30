@@ -1200,7 +1200,7 @@ react-dom/cjs/react-dom-client.production.js:
       { ic: "chart", label: "Mesures", fn: needId(openMeasures) },
       { ic: "camera", label: "Scan balance", fn: needId(openScan) },
       nat("heart", "Sant\u00e9", "Sant\u00e9"),
-      nat("food", "Nutrition (repas)", "Nutrition"),
+      { ic: "food", label: "Nutrition", fn: needId(openFoodJournal) },
       { ic: "doc", label: "Bilan nutritionnel", fn: needId(openNutritionAudit) },
       { ic: "apple", label: "Bibliothèque", fn: function () { openFoodLib(); } },
       nat("drop", "Hydratation", "Hydratation"),
@@ -1225,7 +1225,7 @@ react-dom/cjs/react-dom-client.production.js:
     box.appendChild(grid);
     var ver = document.createElement("div");
     ver.style.cssText = "text-align:center;font-size:11px;color:" + C.dim + ";margin-top:16px;opacity:.8";
-    ver.textContent = "Ex Home · interface v31 (29-06)";
+    ver.textContent = "Ex Home · interface v33 (29-06)";
     box.appendChild(ver);
   }
   /* ===================== Bibliothèque alimentaire partagée v24 ===================== */
@@ -1706,7 +1706,8 @@ react-dom/cjs/react-dom-client.production.js:
     search.style.cssText = "flex:1;min-width:0;background:" + C.surf + ";border:1px solid " + C.border + ";border-radius:10px;padding:10px 12px;color:" + C.text + ";font-size:13px;font-family:inherit;box-sizing:border-box";
     var addBtn = document.createElement("button"); addBtn.textContent = "➕ Ajouter";
     addBtn.style.cssText = "background:" + C.gold + ";color:" + C.bg + ";border:none;border-radius:10px;padding:10px 13px;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;white-space:nowrap";
-    bar.appendChild(search); bar.appendChild(addBtn); box.appendChild(bar);
+    var scanBtn = document.createElement("button"); scanBtn.textContent = "📷"; scanBtn.title = "Scanner un code-barres"; scanBtn.style.cssText = "background:" + C.card + ";color:" + C.gold + ";border:1px solid " + C.gold + "66;border-radius:10px;padding:10px 12px;font-size:14px;cursor:pointer;font-family:inherit"; scanBtn.onclick = function () { openBarcodeScanner(); };
+    bar.appendChild(search); bar.appendChild(scanBtn); bar.appendChild(addBtn); box.appendChild(bar);
     var formWrap = document.createElement("div"); box.appendChild(formWrap);
     var list = document.createElement("div"); box.appendChild(list);
     var foods = [];
@@ -1792,6 +1793,7 @@ react-dom/cjs/react-dom-client.production.js:
     }
     bigBtn("📋", "Bilan nutritionnel", "Le questionnaire de découverte de la cliente", function () { if (id) openNutritionAudit(id); else if (s && s.role === "coach") openCoach(); });
     bigBtn("🍽️", "Journal alimentaire", "Ce que mange la cliente, relié à la bibliothèque", function () { if (id) openFoodJournal(id); else if (s && s.role === "coach") openCoach(); });
+    bigBtn("📷", "Scanner un code-barres", "Infos produit (Nutri-Score, ingrédients…) via Open Food Facts", function () { openBarcodeScanner(); });
     bigBtn("🍎", "Bibliothèque aliments", "Calories & macros par aliment et par quantité", function () { openFoodLib(); });
   }
   /* ===================== Coach posture (détection corporelle locale) v28 ===================== */
@@ -1999,7 +2001,10 @@ react-dom/cjs/react-dom-client.production.js:
       var mealRow = document.createElement("div"); mealRow.style.cssText = "display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px";
       MEALS.forEach(function (m) { var b = document.createElement("button"); b.textContent = m; function st() { var on = meal === m; b.style.cssText = "padding:6px 10px;border-radius:8px;border:" + (on ? "1.5px solid " + C.gold : "1px solid " + C.border) + ";background:" + (on ? C.gold : "transparent") + ";color:" + (on ? C.bg : C.text) + ";font-size:11px;font-weight:" + (on ? 700 : 500) + ";cursor:pointer;font-family:inherit"; } st(); b.__st = st; b.onclick = function () { meal = m; Array.prototype.forEach.call(mealRow.children, function (c) { c.__st && c.__st(); }); }; mealRow.appendChild(b); });
       p.appendChild(mealRow);
-      var search = document.createElement("input"); search.placeholder = "Chercher dans la bibliothèque…"; search.style.cssText = "width:100%;box-sizing:border-box;background:" + C.bg + ";border:1px solid " + C.border + ";border-radius:8px;padding:9px;color:" + C.text + ";font-size:13px;font-family:inherit;margin-bottom:8px"; p.appendChild(search);
+      var search = document.createElement("input"); search.placeholder = "Chercher dans la bibliothèque…"; search.style.cssText = "width:100%;box-sizing:border-box;background:" + C.bg + ";border:1px solid " + C.border + ";border-radius:8px;padding:9px;color:" + C.text + ";font-size:13px;font-family:inherit;margin-bottom:8px";
+      var srow = document.createElement("div"); srow.style.cssText = "display:flex;gap:8px;margin-bottom:8px"; search.style.marginBottom = "0"; search.style.flex = "1"; search.style.minWidth = "0";
+      var bScan = document.createElement("button"); bScan.textContent = "📷"; bScan.title = "Scanner un code-barres"; bScan.style.cssText = "background:" + C.card + ";color:" + C.gold + ";border:1px solid " + C.gold + "66;border-radius:8px;padding:9px 12px;font-size:14px;cursor:pointer;font-family:inherit"; bScan.onclick = function () { openBarcodeScanner(id); };
+      srow.appendChild(search); srow.appendChild(bScan); p.appendChild(srow);
       var results = document.createElement("div"); results.style.cssText = "max-height:190px;overflow:auto"; p.appendChild(results);
       addWrap.appendChild(p); search.focus();
       function ensureLib(cb) { if (libCache) { cb(); return; } loadFoodLib().then(function (f) { libCache = f; cb(); }); }
@@ -2039,6 +2044,101 @@ react-dom/cjs/react-dom-client.production.js:
     }
     var loading = document.createElement("div"); loading.textContent = "Chargement…"; loading.style.cssText = "color:" + C.dim + ";font-size:12px"; listEl.appendChild(loading);
     loadJournal(id).then(function (all) { entries = all; render(); });
+  }
+  /* ===================== Scan code-barres + Open Food Facts v32 ===================== */
+  function ensureZXing() { if (window.ZXingBrowser) return Promise.resolve(window.ZXingBrowser); return loadScriptOnce("https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js", function () { return window.ZXingBrowser; }).then(function () { return window.ZXingBrowser; }); }
+  function lookupOFF(code) {
+    var url = "https://world.openfoodfacts.org/api/v2/product/" + encodeURIComponent(code) + ".json?fields=product_name,product_name_fr,brands,image_front_small_url,nutriments,nutriscore_grade,nova_group,ingredients_text_fr,ingredients_text,allergens,quantity,ecoscore_grade";
+    return fetch(url).then(function (r) { return r.json(); }).then(function (d) {
+      if (!d || d.status !== 1 || !d.product) return null;
+      var p = d.product, n = p.nutriments || {};
+      var kcal = n["energy-kcal_100g"]; if (kcal == null && n["energy_100g"] != null) kcal = n["energy_100g"] / 4.184;
+      return { code: code, nom: ((p.product_name_fr || p.product_name || "").trim()) || ("Produit " + code), brand: ((p.brands || "").split(",")[0] || "").trim(), image: p.image_front_small_url || "", kcal: Math.round(kcal || 0), p: +(n.proteins_100g || 0), g: +(n.carbohydrates_100g || 0), l: +(n.fat_100g || 0), sugars: n.sugars_100g, salt: n.salt_100g, satfat: n["saturated-fat_100g"], fiber: n.fiber_100g, nutriscore: (p.nutriscore_grade || "").toUpperCase(), nova: p.nova_group || null, ingredients: (p.ingredients_text_fr || p.ingredients_text || "").trim(), allergens: (p.allergens || "").replace(/[a-z]{2}:/g, "").replace(/,/g, ", ").trim(), quantity: (p.quantity || "").trim(), eco: (p.ecoscore_grade || "").toUpperCase() };
+    });
+  }
+  function nutriColor(g) { return { A: "#038141", B: "#85BB2F", C: "#FECB02", D: "#EF8200", E: "#E63E11" }[g] || C.dim; }
+  function novaLabel(nv) { return { 1: "Non transformé", 2: "Ingrédient culinaire", 3: "Transformé", 4: "Ultra-transformé" }[nv] || ""; }
+  function renderProduct(prod, host, forId) {
+    host.innerHTML = "";
+    var topR = document.createElement("div"); topR.style.cssText = "display:flex;gap:12px;align-items:flex-start;margin-bottom:12px";
+    if (prod.image) { var im = document.createElement("img"); im.src = prod.image; im.style.cssText = "width:62px;height:62px;object-fit:contain;border-radius:10px;background:#fff;flex-shrink:0"; topR.appendChild(im); }
+    var ti = document.createElement("div");
+    ti.innerHTML = '<div style="font-weight:800;font-size:15px;color:' + C.text + '">' + esc(prod.nom) + '</div>' + (prod.brand ? '<div style="font-size:12px;color:' + C.dim + ';margin-top:2px">' + esc(prod.brand) + (prod.quantity ? " · " + esc(prod.quantity) : "") + '</div>' : '');
+    topR.appendChild(ti); host.appendChild(topR);
+    // badges Nutri-Score / NOVA / Eco
+    var badges = document.createElement("div"); badges.style.cssText = "display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px";
+    if (prod.nutriscore && "ABCDE".indexOf(prod.nutriscore) > -1) { var b1 = document.createElement("div"); b1.style.cssText = "display:flex;align-items:center;gap:6px;font-size:11px;color:" + C.dim; b1.innerHTML = 'Nutri-Score <span style="background:' + nutriColor(prod.nutriscore) + ';color:#fff;font-weight:800;border-radius:6px;padding:2px 8px">' + prod.nutriscore + '</span>'; badges.appendChild(b1); }
+    if (prod.nova) { var b2 = document.createElement("div"); b2.style.cssText = "font-size:11px;color:" + C.dim; b2.innerHTML = 'Transformation <span style="background:' + (prod.nova >= 4 ? "#E63E11" : prod.nova == 3 ? "#EF8200" : "#85BB2F") + ';color:#fff;font-weight:700;border-radius:6px;padding:2px 7px">NOVA ' + prod.nova + '</span> ' + novaLabel(prod.nova); badges.appendChild(b2); }
+    host.appendChild(badges);
+    // nutriments
+    var nut = document.createElement("div"); nut.style.cssText = "background:" + C.surf + ";border:1px solid " + C.border + ";border-radius:12px;padding:12px;margin-bottom:12px";
+    function line(lbl, val, u) { if (val == null || val === "") return ""; return '<div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:1px solid ' + C.border + '"><span style="color:' + C.dim + '">' + lbl + '</span><span style="color:' + C.text + ';font-weight:600">' + val + (u || "") + '</span></div>'; }
+    nut.innerHTML = '<div style="font-size:11px;color:' + C.gold + ';font-weight:800;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Pour 100 g</div>'
+      + line("Calories", prod.kcal, " kcal") + line("Protéines", prod.p, " g") + line("Glucides", prod.g, " g") + line("dont sucres", prod.sugars, " g") + line("Lipides", prod.l, " g") + line("dont saturés", prod.satfat, " g") + line("Fibres", prod.fiber, " g") + line("Sel", prod.salt, " g");
+    host.appendChild(nut);
+    if (prod.ingredients) { var ing = document.createElement("details"); ing.style.cssText = "margin-bottom:10px"; ing.innerHTML = '<summary style="font-size:12px;color:' + C.gold + ';cursor:pointer">Ingrédients</summary><div style="font-size:12px;color:' + C.dim + ';line-height:1.5;margin-top:6px">' + esc(prod.ingredients) + '</div>'; host.appendChild(ing); }
+    if (prod.allergens) { var al = document.createElement("div"); al.style.cssText = "font-size:12px;color:#E0852E;margin-bottom:12px"; al.textContent = "⚠️ Allergènes : " + prod.allergens; host.appendChild(al); }
+    // actions
+    var act = document.createElement("div"); act.style.cssText = "display:flex;flex-wrap:wrap;gap:8px";
+    var bLib = document.createElement("button"); bLib.textContent = "➕ Bibliothèque"; bLib.style.cssText = "flex:1;background:" + C.gold + ";color:" + C.bg + ";border:none;border-radius:10px;padding:11px;font-weight:700;font-size:12px;cursor:pointer;font-family:inherit";
+    bLib.onclick = function () { addFood({ nom: (prod.brand ? prod.brand + " — " : "") + prod.nom, base: 100, unit: "g", kcal: prod.kcal, p: prod.p, g: prod.g, l: prod.l }); bLib.textContent = "✓ Ajouté à la bibliothèque"; };
+    act.appendChild(bLib); host.appendChild(act);
+    // journal
+    var jr = document.createElement("div"); jr.style.cssText = "display:flex;gap:6px;align-items:center;margin-top:8px";
+    var jmeal = document.createElement("select"); ["Petit-déjeuner", "Déjeuner", "Dîner", "Collation"].forEach(function (mm) { var o = document.createElement("option"); o.value = mm; o.textContent = mm; jmeal.appendChild(o); }); jmeal.style.cssText = "flex:1;min-width:0;background:" + C.bg + ";border:1px solid " + C.border + ";border-radius:8px;padding:8px;color:" + C.text + ";font-size:11px;font-family:inherit";
+    var jq = document.createElement("input"); jq.type = "number"; jq.value = 100; jq.style.cssText = "width:64px;background:" + C.bg + ";border:1px solid " + C.border + ";border-radius:8px;padding:8px;color:" + C.text + ";font-size:12px;font-family:inherit";
+    var jg = document.createElement("span"); jg.textContent = "g"; jg.style.cssText = "font-size:11px;color:" + C.dim;
+    var jbtn = document.createElement("button"); jbtn.textContent = "Au journal"; jbtn.style.cssText = "background:" + C.ok + ";color:#fff;border:none;border-radius:8px;padding:9px 12px;font-weight:700;font-size:11px;cursor:pointer;font-family:inherit;white-space:nowrap";
+    jbtn.onclick = function () { var tid = forId || targetClientId(); if (!tid) { exhToast("Ouvre depuis une cliente pour l'ajouter à son journal."); return; } var q = parseFloat(jq.value) || 0; var f = q / 100; saveJournalEntry(tid, { date: today(), meal: jmeal.value, nom: (prod.brand ? prod.brand + " — " : "") + prod.nom, qty: q, unit: "g", kcal: fround(prod.kcal * f), p: fround(prod.p * f, 1), g: fround(prod.g * f, 1), l: fround(prod.l * f, 1) }).then(function () { jbtn.textContent = "✓"; setTimeout(function () { jbtn.textContent = "Au journal"; }, 1400); }); };
+    jr.appendChild(jmeal); jr.appendChild(jq); jr.appendChild(jg); jr.appendChild(jbtn); host.appendChild(jr);
+  }
+  function openBarcodeScanner(forId) {
+    var box = overlay(); header(box, "📷 Code-barres");
+    var intro = document.createElement("div"); intro.style.cssText = "font-size:12px;color:" + C.dim + ";margin:-6px 0 12px;line-height:1.5";
+    intro.textContent = "Scanne ou tape le code-barres : infos produit (calories, Nutri-Score, ingrédients…) via Open Food Facts, puis ajoute-le.";
+    box.appendChild(intro);
+    var man = document.createElement("div"); man.style.cssText = "display:flex;gap:8px;margin-bottom:10px";
+    var inp = document.createElement("input"); inp.type = "tel"; inp.placeholder = "Code-barres (chiffres)"; inp.style.cssText = "flex:1;min-width:0;background:" + C.surf + ";border:1px solid " + C.border + ";border-radius:10px;padding:10px 12px;color:" + C.text + ";font-size:13px;font-family:inherit";
+    var goBtn = document.createElement("button"); goBtn.textContent = "Chercher"; goBtn.style.cssText = "background:" + C.gold + ";color:" + C.bg + ";border:none;border-radius:10px;padding:10px 14px;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit";
+    man.appendChild(inp); man.appendChild(goBtn); box.appendChild(man);
+    var camBtn = document.createElement("button"); camBtn.textContent = "📷 Scanner avec la caméra"; camBtn.style.cssText = "width:100%;padding:11px;margin-bottom:12px;border:1px solid " + C.gold + "66;border-radius:12px;background:" + C.card + ";color:" + C.gold + ";font-weight:700;font-size:13px;cursor:pointer;font-family:inherit"; box.appendChild(camBtn);
+    var status = document.createElement("div"); status.style.cssText = "font-size:12px;color:" + C.dim + ";margin-bottom:10px"; box.appendChild(status);
+    var video = document.createElement("video"); video.setAttribute("playsinline", ""); video.muted = true; video.style.cssText = "width:100%;border-radius:12px;border:1px solid " + C.border + ";display:none;margin-bottom:12px"; box.appendChild(video);
+    var result = document.createElement("div"); box.appendChild(result);
+    var ctl = { stream: null, reader: null, raf: 0 };
+    function stopCam() { if (ctl.raf) { cancelAnimationFrame(ctl.raf); ctl.raf = 0; } if (ctl.reader) { try { ctl.reader.reset(); } catch (e) {} ctl.reader = null; } if (ctl.stream) { ctl.stream.getTracks().forEach(function (t) { t.stop(); }); ctl.stream = null; } video.style.display = "none"; }
+    var mo = new MutationObserver(function () { if (!document.getElementById("exh-ov")) { stopCam(); mo.disconnect(); } });
+    mo.observe(document.body, { childList: true });
+    function doLookup(code) {
+      status.textContent = "Recherche du produit…"; result.innerHTML = "";
+      lookupOFF(code).then(function (prod) {
+        if (!prod) { status.innerHTML = '<span style="color:#E0852E">Produit introuvable pour ' + esc(code) + '. Tu peux l\'ajouter à la main dans la bibliothèque.</span>'; return; }
+        status.textContent = "✓ Code " + code; renderProduct(prod, result, forId);
+      }).catch(function () { status.innerHTML = '<span style="color:#E07060">Connexion requise pour interroger la base produits.</span>'; });
+    }
+    goBtn.onclick = function () { var c = (inp.value || "").replace(/\D/g, ""); if (c.length < 6) { status.textContent = "Entre un code-barres valide."; return; } stopCam(); doLookup(c); };
+    inp.onkeydown = function (e) { if (e.key === "Enter") goBtn.onclick(); };
+    camBtn.onclick = function () {
+      if (ctl.stream) { stopCam(); camBtn.textContent = "📷 Scanner avec la caméra"; status.textContent = ""; return; }
+      status.textContent = "Démarrage caméra…";
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } }).then(function (stream) {
+        ctl.stream = stream; video.srcObject = stream; video.style.display = "block"; video.play(); camBtn.textContent = "⏹ Arrêter la caméra";
+        function onCode(code) { stopCam(); camBtn.textContent = "📷 Scanner avec la caméra"; doLookup(("" + code).replace(/\D/g, "")); }
+        if ("BarcodeDetector" in window) {
+          var det = new window.BarcodeDetector({ formats: ["ean_13", "ean_8", "upc_a", "upc_e", "code_128"] });
+          status.textContent = "Vise le code-barres…";
+          function loop() { if (!ctl.stream) return; det.detect(video).then(function (codes) { if (codes && codes.length) { onCode(codes[0].rawValue); return; } ctl.raf = requestAnimationFrame(loop); }).catch(function () { ctl.raf = requestAnimationFrame(loop); }); }
+          ctl.raf = requestAnimationFrame(loop);
+        } else {
+          status.textContent = "Chargement du lecteur…";
+          ensureZXing().then(function (ZB) {
+            status.textContent = "Vise le code-barres…";
+            ctl.reader = new ZB.BrowserMultiFormatReader();
+            ctl.reader.decodeFromStream(ctl.stream, video, function (res, err) { if (res) onCode(res.getText()); });
+          }).catch(function () { status.innerHTML = '<span style="color:#E0852E">Scan caméra indisponible sur cet appareil — tape le code à la main ci-dessus.</span>'; stopCam(); camBtn.textContent = "📷 Scanner avec la caméra"; });
+        }
+      }).catch(function () { status.innerHTML = '<span style="color:#E07060">Autorise la caméra, ou tape le code à la main.</span>'; });
+    };
   }
 })();
 </script>
