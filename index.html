@@ -997,18 +997,22 @@ react-dom/cjs/react-dom-client.production.js:
   }
   /* ===================== Fusion mesures natives (Santé) + scans (lecture seule) v12 ===================== */
   var NATIVE_MAP = { poids: "poids", masseGrasse: "graisse", masseMusc: "muscle", eauCorp: "eau", basale: "metabolisme", imc: "imc", masseOsseuse: "osseuse", tourTaille: "tourTaille", tourHanches: "tourHanches", fcRepos: "fcRepos", pas: "pas", sommeil: "sommeil", calories: "calories", viscerale: "viscerale", sousCutanee: "sousCutanee", proteines: "proteines", muscleSquel: "muscleSquel", masseMaigre: "maigre", ageMeta: "age" };
+  function mapNativeMeasure(m) {
+    var o = { date: m.date || today(), ts: m.ts || (m.date ? new Date(m.date).getTime() : Date.now()), source: m.source || "santé" };
+    Object.keys(NATIVE_MAP).forEach(function (nk) { if (m[nk] != null && m[nk] !== "") { var v = parseFloat(m[nk]); if (!isNaN(v)) o[NATIVE_MAP[nk]] = v; } });
+    return o;
+  }
   function nativeMeasures(id) {
     var c = findClient(id) || {}; var arr = (c.sante && c.sante.mesures) || [];
     if (!Array.isArray(arr)) return [];
-    return arr.map(function (m) {
-      var o = { date: m.date || today(), ts: m.ts || (m.date ? new Date(m.date).getTime() : Date.now()), source: m.source || "santé" };
-      Object.keys(NATIVE_MAP).forEach(function (nk) { if (m[nk] != null && m[nk] !== "") { var v = parseFloat(m[nk]); if (!isNaN(v)) o[NATIVE_MAP[nk]] = v; } });
-      return o;
-    });
+    return arr.map(mapNativeMeasure);
   }
+  function mirrorMeasures(arr) { return (Array.isArray(arr) ? arr : []).map(mapNativeMeasure); }
   function loadAllMeasures(id) {
-    return loadScans(id).then(function (scans) {
-      var all = (scans || []).concat(nativeMeasures(id));
+    return Promise.all([loadScans(id), cloudGet(id + "-mirror")]).then(function (res) {
+      var scans = res[0] || [], mir = res[1];
+      var all = scans.concat(nativeMeasures(id));
+      if (mir && mir.mesures) all = all.concat(mirrorMeasures(mir.mesures));
       all.sort(function (a, b) { return (a.date || "").localeCompare(b.date || "") || ((a.ts || 0) - (b.ts || 0)); });
       return all;
     }).catch(function () { return nativeMeasures(id); });
@@ -1080,7 +1084,7 @@ react-dom/cjs/react-dom-client.production.js:
     var c = getClient(id);
     var box = overlay(); header(box, "👤 Profil");
     if (!c) { var w = document.createElement("div"); w.style.cssText = "color:" + C.dim + ";font-size:13px"; w.textContent = "Cliente introuvable sur cet appareil."; box.appendChild(w); return; }
-    var bt = belt((c.joursReussis || []).length);
+    var localJr = (c.joursReussis || []).length; var jrUsed = localJr; var bt = belt(jrUsed);
     var head = document.createElement("div"); head.style.cssText = "display:flex;gap:14px;align-items:center;margin-bottom:14px";
     var ph = document.createElement(c.photo ? "img" : "div");
     ph.style.cssText = "width:72px;height:72px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid " + C.gold + ";background:" + C.surf;
@@ -1102,7 +1106,12 @@ react-dom/cjs/react-dom-client.production.js:
     if (p.nbEnfants !== undefined && p.nbEnfants !== "") prows.push(["Enfants", (p.nbEnfants === "0" || p.nbEnfants === 0) ? "Aucun" : String(p.nbEnfants)]);
     if (prows.length) { section("Profil"); prows.forEach(function (r) { rowLine(r[0], r[1]); }); }
     if (c.objectif) { section("Objectif"); var o = document.createElement("div"); o.style.cssText = "color:" + C.text + ";font-size:13px;line-height:1.5;background:" + C.surf + ";border:1px solid " + C.border + ";border-radius:12px;padding:12px 13px"; o.textContent = c.objectif; box.appendChild(o); }
-    section("Progression"); rowLine("Jours validés", String((c.joursReussis || []).length));
+    section("Progression");
+    var jrRow = document.createElement("div"); jrRow.style.cssText = "display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid " + C.border;
+    var jrL = document.createElement("div"); jrL.textContent = "Jours validés"; jrL.style.cssText = "color:" + C.dim + ";font-size:13px";
+    var joursVal = document.createElement("div"); joursVal.textContent = String(jrUsed); joursVal.style.cssText = "color:" + C.text + ";font-size:13px;font-weight:600;text-align:right";
+    jrRow.appendChild(jrL); jrRow.appendChild(joursVal); box.appendChild(jrRow);
+    loadMirror(id).then(function (mir) { if (!mir) return; var mj = mir.jr || 0; if (mj > jrUsed) { jrUsed = mj; var nb = belt(jrUsed); chip.innerHTML = '<span style="width:11px;height:11px;border-radius:50%;background:' + nb.c + ';border:1px solid rgba(0,0,0,.3)"></span> Ceinture ' + nb.n; joursVal.textContent = String(jrUsed); } }).catch(function () {});
     section("Mesures clés");
     var mGrid = document.createElement("div"); mGrid.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:10px"; box.appendChild(mGrid);
     var loading = document.createElement("div"); loading.textContent = "Chargement…"; loading.style.cssText = "color:" + C.dim + ";font-size:12px;grid-column:1/-1"; mGrid.appendChild(loading);
@@ -1225,7 +1234,7 @@ react-dom/cjs/react-dom-client.production.js:
     box.appendChild(grid);
     var ver = document.createElement("div");
     ver.style.cssText = "text-align:center;font-size:11px;color:" + C.dim + ";margin-top:16px;opacity:.8";
-    ver.textContent = "Ex Home · interface v33 (29-06)";
+    ver.textContent = "Ex Home · interface v34 (29-06)";
     box.appendChild(ver);
   }
   /* ===================== Bibliothèque alimentaire partagée v24 ===================== */
@@ -2140,6 +2149,22 @@ react-dom/cjs/react-dom-client.production.js:
       }).catch(function () { status.innerHTML = '<span style="color:#E07060">Autorise la caméra, ou tape le code à la main.</span>'; });
     };
   }
+  /* ===================== Pont de synchro fiable (miroir cliente) v34 ===================== */
+  function clientSnapshot() {
+    var s = session(); if (!s || s.role !== "client" || !s.clientId) return null;
+    var c = findClient(s.clientId); if (!c) return null;
+    return { jr: (c.joursReussis || []).length, po: (c.petitsObjectifs || []).length, mesures: (c.sante && c.sante.mesures) || [], nom: c.nom, dateDebut: c.dateDebut, objectif: c.objectif || "", ts: Date.now() };
+  }
+  var __lastMirror = "";
+  function pushMirror() {
+    var snap = clientSnapshot(); if (!snap) return;
+    var key = JSON.stringify({ jr: snap.jr, m: snap.mesures, po: snap.po, o: snap.objectif });
+    if (key === __lastMirror) return; __lastMirror = key;
+    cloudPut(session().clientId + "-mirror", snap);
+  }
+  function loadMirror(id) { return cloudGet(id + "-mirror"); }
+  setTimeout(pushMirror, 4000);
+  setInterval(pushMirror, 20000);
 })();
 </script>
 </body></html>
