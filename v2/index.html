@@ -135,6 +135,8 @@ var syncT;
 function setSync(msg){ var e=document.getElementById("sync"); if(!e) return; e.textContent=msg; e.style.display="block";
   clearTimeout(syncT); syncT=setTimeout(function(){ e.style.display="none"; }, 2600); }
 
+var APP_VERSION = "build 6 · 30 juin";
+
 /* ---------- localStorage ---------- */
 function readLS(k){ try{ return JSON.parse(localStorage.getItem(k)); }catch(e){ return null; } }
 function writeLS(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
@@ -208,9 +210,10 @@ function emptyClient(nom){
   return { id:genId(), nom:nom||"", login:slugLogin(nom||"cliente"), pin:"1234",
     profil:{ age:"", taille:"", sexe:"", niveau:"" },
     objectifText:"", dateDebut:today(),
-    joursReussis:[], objectifs:[], mesures:[], cibles:{ basale:null },
+    joursReussis:[], objectifs:[], mesures:[], sante:[], journal:[], ergo:{}, hydra:{}, cibles:{ basale:null },
     _mtime:0 };
 }
+function maxMerge(a,b){ a=a||{}; b=b||{}; var o={}; Object.keys(a).forEach(function(k){o[k]=a[k];}); Object.keys(b).forEach(function(k){ o[k]=Math.max(o[k]||0,b[k]||0); }); return o; }
 function unionBy(arr, keyFn){
   var map={};
   arr.forEach(function(x){ var k=keyFn(x); if(k==null) return; if(!(k in map) || (x._ts||0) >= (map[k]._ts||0)) map[k]=x; });
@@ -225,6 +228,10 @@ function mergeClient(a, b){
   m.mesures   = unionBy((a.mesures||[]).concat(b.mesures||[]),   function(x){ return x.id; });
   m.objectifs = unionBy((a.objectifs||[]).concat(b.objectifs||[]),function(x){ return x.id; });
   m.joursReussis = Array.from(new Set((a.joursReussis||[]).concat(b.joursReussis||[]))).sort();
+  m.sante = unionBy((a.sante||[]).concat(b.sante||[]), function(x){ return x.id; });
+  m.journal = unionBy((a.journal||[]).concat(b.journal||[]), function(x){ return x.id; });
+  m.ergo = maxMerge(a.ergo, b.ergo);
+  m.hydra = maxMerge(a.hydra, b.hydra);
   m._mtime = Math.max(a._mtime||0, b._mtime||0);
   return m;
 }
@@ -369,6 +376,7 @@ function screenLogin(){
   pinIn.addEventListener("keydown",function(e){ if(e.key==="Enter") attempt(); });
 
   app.appendChild(phraseCard());
+  var vf=el("div","center muted"); vf.style.cssText="margin-top:18px;font-size:11px;letter-spacing:.05em"; vf.textContent="Ex Home v2 · "+APP_VERSION; app.appendChild(vf);
 }
 
 /* ---------- ROSTER (coach) ---------- */
@@ -398,6 +406,7 @@ function screenRoster(){
     var add=el("button","btn line block","+ Ajouter une pratiquante"); add.style.marginTop="6px";
     add.onclick=function(){ addClientForm(r); };
     app.appendChild(add);
+    var vf=el("div","center muted"); vf.style.cssText="margin-top:22px;font-size:11px;letter-spacing:.05em"; vf.textContent="Ex Home v2 · "+APP_VERSION; app.appendChild(vf);
   });
 }
 function addClientForm(roster){
@@ -462,12 +471,24 @@ function openClient(id, isSelf){
       var lb=el("div"); lb.textContent=label; lb.style.cssText="font-size:"+(mob?12:11)+"px;font-weight:600;text-align:center;color:var(--text);letter-spacing:.02em";
       b.appendChild(plate); b.appendChild(lb); b.onclick=fn; grid.appendChild(b);
     }
+    function soon(lbl){ return function(){ openSoon(lbl, function(){ openClient(c.id,isSelf); }); }; }
     appIcon("calendar","Valider", function(){ screenProgression(c, isSelf); });
+    appIcon("timer","Compteur ergo", function(){ screenCompteur(c, isSelf); });
+    appIcon("drop","Hydratation", function(){ screenHydra(c, isSelf); });
+    appIcon("heart","Santé", function(){ screenSante(c, isSelf); });
     appIcon("chart","Mesures", function(){ screenMesures(c, isSelf); });
     appIcon("target","Objectifs", function(){ screenObjectifs(c, isSelf); });
+    appIcon("food","Nutrition", function(){ openFoodJournal(c, isSelf); });
+    appIcon("apple","Bibliothèque", function(){ openFoodLib(function(){ openClient(c.id,isSelf); }, function(food){ qtyAdd(food, c, isSelf); }); });
+    appIcon("dash","Tableau de bord", function(){ openDashboard(c, isSelf); });
+    appIcon("list","Programme", soon("Programme"));
+    appIcon("calendar","Séances", soon("Séances"));
+    appIcon("chat","Messages", soon("Messages"));
+    appIcon("posture","Coach posture", soon("Coach posture"));
+    appIcon("camera","Scan balance", soon("Scan balance"));
     appIcon("user","Profil", function(){ screenProfil(c, isSelf); });
     app.appendChild(grid);
-    var foot=el("div","center muted"); foot.style.cssText="margin-top:30px;font-size:11px;letter-spacing:.04em"; foot.textContent="Ex Home · v2 · 30-06"; app.appendChild(foot);
+    var foot=el("div","center muted"); foot.style.cssText="margin-top:30px;font-size:11px;letter-spacing:.04em"; foot.textContent="Ex Home v2 · "+APP_VERSION; app.appendChild(foot);
   });
 }
 
@@ -662,6 +683,738 @@ function screenProfil(c, isSelf){
       toast("Profil enregistré"); screenProfil(c,isSelf);
     });
   };
+}
+
+function openSoon(label, back){
+  clear(); topbar(label, "Bientôt", back);
+  var card=el("div","card center");
+  card.innerHTML='<div style="font-size:34px;margin-bottom:10px">🛠️</div>'
+    +'<div style="font-weight:700;margin-bottom:6px">'+esc(label)+' arrive très vite</div>'
+    +'<div class="muted" style="font-size:13px;line-height:1.5">Cette section est en cours de reconstruction dans la nouvelle interface, avec tout le contenu de l\'ancienne app. Tes données et le reste de l\'app ne sont pas affectés.</div>';
+  app.appendChild(card);
+}
+
+function screenCompteur(c, isSelf){
+  clear(); topbar("Compteur ergo", c.nom, function(){ openClient(c.id,isSelf); });
+  c.ergo=c.ergo||{}; var GOAL=30;
+  function cnt(){ return c.ergo[today()]||0; }
+  var wrap=el("div");
+  function paint(){
+    wrap.innerHTML="";
+    var n=cnt(), mins=Math.round(n*8/60);
+    var head=el("div","card center");
+    head.innerHTML='<div class="eyebrow">Aujourd\'hui</div>'
+      +'<div style="font-size:46px;font-weight:800;margin:8px 0 2px;color:var(--gold)">'+n+'</div>'
+      +'<div class="muted">ramassages · objectif '+GOAL+'</div>';
+    var bw=el("div"); bw.style.cssText="height:9px;border-radius:9px;background:var(--surf);margin:14px 0 6px;overflow:hidden";
+    var fl=el("div"); fl.style.cssText="height:100%;width:"+Math.min(100,n/GOAL*100)+"%;background:linear-gradient(90deg,var(--gold),var(--ok))"; bw.appendChild(fl); head.appendChild(bw);
+    var msg=el("div","muted"); msg.style.cssText="font-size:13px;margin-top:8px";
+    if(n===0) msg.textContent="💧 Pas encore de ramassage aujourd'hui — c'est parti !";
+    else if(n<GOAL) msg.textContent="💪 Encore "+(GOAL-n)+" ramassages pour atteindre l'objectif du jour !";
+    else msg.textContent="✓ Objectif atteint ! "+n+" ramassages ≈ "+mins+" min de mouvement.";
+    head.appendChild(msg); wrap.appendChild(head);
+    var btns=el("div","wrap"); btns.style.marginBottom="14px";
+    [1,5].forEach(function(p){ var b=el("button","btn primary","+ "+p); b.style.flex="1"; b.onclick=function(){ c.ergo[today()]=cnt()+p; saveClient(c).then(function(m){ Object.assign(c,m); paint(); }); }; btns.appendChild(b); });
+    var minus=el("button","btn ghost","− 1"); minus.onclick=function(){ if(cnt()>0){ c.ergo[today()]=cnt()-1; saveClient(c).then(function(m){ Object.assign(c,m); paint(); }); } }; btns.appendChild(minus);
+    wrap.appendChild(btns);
+    var week=el("div","card"); week.appendChild(el("div","eyebrow","Cette semaine"));
+    var sp=el("div"); sp.style.height="8px"; week.appendChild(sp); var total=0;
+    for(var i=6;i>=0;i--){ var d=new Date(); d.setDate(d.getDate()-i); var key=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); var v=c.ergo[key]||0; total+=v; var l=el("div","line"); l.innerHTML='<span class="k">'+fmtDate(key)+'</span><span class="v">'+v+'</span>'; week.appendChild(l); }
+    var tot=el("div","line"); tot.innerHTML='<span class="k" style="color:var(--gold)">Total semaine</span><span class="v" style="color:var(--gold)">'+total+'</span>'; week.appendChild(tot);
+    wrap.appendChild(week);
+  }
+  paint(); app.appendChild(wrap);
+}
+
+function screenHydra(c, isSelf){
+  clear(); topbar("Hydratation", c.nom, function(){ openClient(c.id,isSelf); });
+  c.hydra=c.hydra||{}; var GOAL=8;
+  function g(){ return c.hydra[today()]||0; }
+  var wrap=el("div");
+  function paint(){
+    wrap.innerHTML=""; var n=g();
+    var head=el("div","card center");
+    head.innerHTML='<div class="eyebrow">Aujourd\'hui</div><div style="font-size:42px;font-weight:800;margin:8px 0 2px;color:var(--gold)">'+n+' / '+GOAL+'</div><div class="muted">verres d\'eau</div>';
+    var gl=el("div"); gl.style.cssText="display:flex;flex-wrap:wrap;gap:7px;justify-content:center;margin-top:14px";
+    for(var i=0;i<Math.max(GOAL,n);i++){ var on=i<n; var v=el("div"); v.style.cssText="font-size:24px;opacity:"+(on?"1":".26"); v.textContent="💧"; gl.appendChild(v); }
+    head.appendChild(gl); wrap.appendChild(head);
+    var btns=el("div","wrap");
+    var add=el("button","btn primary","+ 1 verre"); add.style.flex="1"; add.onclick=function(){ c.hydra[today()]=g()+1; saveClient(c).then(function(m){ Object.assign(c,m); paint(); }); };
+    var rem=el("button","btn ghost","− 1"); rem.onclick=function(){ if(g()>0){ c.hydra[today()]=g()-1; saveClient(c).then(function(m){ Object.assign(c,m); paint(); }); } };
+    btns.appendChild(add); btns.appendChild(rem); wrap.appendChild(btns);
+  }
+  paint(); app.appendChild(wrap);
+}
+
+function screenSante(c, isSelf){
+  clear(); topbar("Santé du jour", c.nom, function(){ openClient(c.id,isSelf); });
+  c.sante=c.sante||[];
+  var emos=["😞","😕","😐","🙂","😄"]; var hum=0;
+  var card=el("div","card");
+  card.appendChild(el("div","eyebrow","Comment tu te sens aujourd'hui ?"));
+  var sp=el("div"); sp.style.height="12px"; card.appendChild(sp);
+  var humRow=el("div"); humRow.style.cssText="display:flex;gap:8px;margin-bottom:6px"; var humBtns=[];
+  emos.forEach(function(e,i){ var b=el("button"); b.textContent=e; b.style.cssText="flex:1;font-size:25px;background:var(--surf);border:1px solid var(--border);border-radius:12px;padding:8px;cursor:pointer;opacity:.45"; b.onclick=function(){ hum=i+1; humBtns.forEach(function(x,j){ x.style.opacity=j===i?"1":".4"; x.style.borderColor=j===i?"var(--gold)":"var(--border)"; }); }; humBtns.push(b); humRow.appendChild(b); });
+  card.appendChild(field("Humeur", humRow));
+  var sommeil=input("",{type:"number",inputmode:"decimal",placeholder:"heures"});
+  var stress=el("select","inp"); ["","Faible","Modéré","Élevé"].forEach(function(o){ var op=document.createElement("option"); op.value=o; op.textContent=o||"Niveau de stress…"; stress.appendChild(op); });
+  var two=el("div","two"); two.appendChild(field("Sommeil (h)", sommeil)); two.appendChild(field("Stress", stress)); card.appendChild(two);
+  var note=input("",{placeholder:"Note (optionnel)"}); card.appendChild(field("Note", note));
+  var save=el("button","btn primary block","Enregistrer"); card.appendChild(save); app.appendChild(card);
+  save.onclick=function(){ c.sante=c.sante.concat([{id:genId(),date:today(),humeur:hum||null,sommeil:num(sommeil.value),stress:stress.value,note:note.value,_ts:Date.now()}]); save.disabled=true; save.textContent="Enregistrement…"; saveClient(c).then(function(m){ Object.assign(c,m); toast("Enregistré"); screenSante(c,isSelf); }); };
+  var hist=(c.sante||[]).filter(function(x){return !x.del;}).sort(function(a,b){return (b.date||"").localeCompare(a.date||"");}).slice(0,10);
+  if(hist.length){ var hc=el("div","card"); hc.appendChild(el("div","eyebrow","Historique")); var s2=el("div"); s2.style.height="8px"; hc.appendChild(s2);
+    hist.forEach(function(x){ var l=el("div","line"); var em=emos[(x.humeur||0)-1]||"–"; l.innerHTML='<span class="k">'+fmtDate(x.date)+'</span><span class="v">'+em+(x.sommeil?" · "+x.sommeil+"h":"")+(x.stress?" · "+esc(x.stress):"")+'</span>'; hc.appendChild(l); });
+    app.appendChild(hc); }
+}
+
+/* ===================== Nutrition : bibliothèque + journal + scan ===================== */
+var SEED_VERSION=3;
+var FOOD_RAW=[
+    ["Pomme",100,"g",52,0.3,14,0.2],
+    ["Banane",100,"g",89,1.1,23,0.3],
+    ["Orange",100,"g",47,0.9,12,0.1],
+    ["Fraise",100,"g",32,0.7,7.7,0.3],
+    ["Raisin",100,"g",69,0.7,18,0.2],
+    ["Poire",100,"g",57,0.4,15,0.1],
+    ["Pêche",100,"g",39,0.9,10,0.3],
+    ["Abricot",100,"g",48,1.4,11,0.4],
+    ["Kiwi",100,"g",61,1.1,15,0.5],
+    ["Ananas",100,"g",50,0.5,13,0.1],
+    ["Mangue",100,"g",60,0.8,15,0.4],
+    ["Pastèque",100,"g",30,0.6,8,0.2],
+    ["Melon",100,"g",34,0.8,8,0.2],
+    ["Cerise",100,"g",63,1,16,0.2],
+    ["Citron",100,"g",29,1.1,9,0.3],
+    ["Framboise",100,"g",52,1.2,12,0.7],
+    ["Myrtille",100,"g",57,0.7,14,0.3],
+    ["Prune",100,"g",46,0.7,11,0.3],
+    ["Clémentine",100,"g",47,0.9,12,0.2],
+    ["Pamplemousse",100,"g",42,0.8,11,0.1],
+    ["Avocat",100,"g",160,2,9,15],
+    ["Figue",100,"g",74,0.8,19,0.3],
+    ["Datte",100,"g",277,1.8,75,0.2],
+    ["Grenade",100,"g",83,1.7,19,1.2],
+    ["Nectarine",100,"g",44,1.1,11,0.3],
+    ["Cassis",100,"g",63,1.4,15,0.4],
+    ["Tomate",100,"g",18,0.9,3.9,0.2],
+    ["Carotte",100,"g",41,0.9,10,0.2],
+    ["Courgette",100,"g",17,1.2,3.1,0.3],
+    ["Brocoli",100,"g",34,2.8,7,0.4],
+    ["Chou-fleur",100,"g",25,1.9,5,0.3],
+    ["Épinard",100,"g",23,2.9,3.6,0.4],
+    ["Salade verte",100,"g",15,1.4,2.9,0.2],
+    ["Concombre",100,"g",15,0.7,3.6,0.1],
+    ["Poivron",100,"g",31,1,6,0.3],
+    ["Aubergine",100,"g",25,1,6,0.2],
+    ["Haricot vert",100,"g",31,1.8,7,0.1],
+    ["Petit pois",100,"g",81,5,14,0.4],
+    ["Pomme de terre",100,"g",77,2,17,0.1],
+    ["Patate douce",100,"g",86,1.6,20,0.1],
+    ["Oignon",100,"g",40,1.1,9,0.1],
+    ["Ail",100,"g",149,6.4,33,0.5],
+    ["Champignon",100,"g",22,3.1,3.3,0.3],
+    ["Maïs",100,"g",86,3.2,19,1.2],
+    ["Betterave",100,"g",43,1.6,10,0.2],
+    ["Céleri",100,"g",16,0.7,3,0.2],
+    ["Chou",100,"g",25,1.3,6,0.1],
+    ["Poireau",100,"g",61,1.5,14,0.3],
+    ["Potiron",100,"g",26,1,6.5,0.1],
+    ["Asperge",100,"g",20,2.2,3.9,0.1],
+    ["Radis",100,"g",16,0.7,3.4,0.1],
+    ["Endive",100,"g",17,1,4,0.1],
+    ["Fenouil",100,"g",31,1.2,7,0.2],
+    ["Artichaut",100,"g",47,3.3,11,0.2],
+    ["Navet",100,"g",28,0.9,6,0.1],
+    ["Chou de Bruxelles",100,"g",43,3.4,9,0.3],
+    ["Poulet (blanc)",100,"g",165,31,0,3.6],
+    ["Poulet (cuisse)",100,"g",209,26,0,11],
+    ["Dinde (blanc)",100,"g",135,29,0,1],
+    ["Bœuf haché 5%",100,"g",137,21,0,5],
+    ["Bœuf haché 15%",100,"g",215,19,0,15],
+    ["Steak de bœuf",100,"g",250,26,0,15],
+    ["Porc (filet)",100,"g",143,21,0,6],
+    ["Côte de porc",100,"g",231,26,0,14],
+    ["Agneau",100,"g",294,25,0,21],
+    ["Veau",100,"g",172,24,0,8],
+    ["Jambon blanc",100,"g",107,18,1,3.5],
+    ["Bacon",100,"g",541,37,1.4,42],
+    ["Saucisse",100,"g",300,12,2,27],
+    ["Lardons",100,"g",300,14,1,27],
+    ["Canard",100,"g",337,19,0,28],
+    ["Chorizo",100,"g",455,24,2,38],
+    ["Merguez",100,"g",290,15,1,25],
+    ["Saucisson sec",100,"g",455,25,2,38],
+    ["Saumon",100,"g",208,20,0,13],
+    ["Thon frais",100,"g",144,23,0,5],
+    ["Thon au naturel (boîte)",100,"g",116,26,0,1],
+    ["Cabillaud",100,"g",82,18,0,0.7],
+    ["Sole",100,"g",86,17,0,1.2],
+    ["Maquereau",100,"g",205,19,0,14],
+    ["Sardine",100,"g",208,25,0,11],
+    ["Truite",100,"g",119,20,0,3.5],
+    ["Crevette",100,"g",99,24,0.2,0.3],
+    ["Moule",100,"g",86,12,4,2],
+    ["Crabe",100,"g",87,18,0,1],
+    ["Hareng",100,"g",158,18,0,9],
+    ["Bar",100,"g",97,18,0,2.5],
+    ["Colin/lieu",100,"g",90,18,0,1],
+    ["Saumon fumé",100,"g",182,25,0,9],
+    ["Surimi",100,"g",95,8,12,1],
+    ["Calmar",100,"g",92,16,3,1.4],
+    ["Œuf",1,"pièce",78,6,0.6,5],
+    ["Blanc d'œuf",1,"pièce",17,3.6,0.2,0.1],
+    ["Lait 1/2 écrémé",100,"ml",46,3.3,4.8,1.6],
+    ["Lait entier",100,"ml",64,3.2,4.8,3.6],
+    ["Lait écrémé",100,"ml",34,3.4,5,0.1],
+    ["Yaourt nature",100,"g",61,3.5,4.7,3.3],
+    ["Yaourt grec",100,"g",97,9,4,5],
+    ["Fromage blanc 0%",100,"g",47,8,4,0.2],
+    ["Fromage blanc 20%",100,"g",80,7.5,4,3],
+    ["Skyr",100,"g",63,11,4,0.2],
+    ["Beurre",100,"g",717,0.9,0.1,81],
+    ["Crème fraîche 30%",100,"g",290,2.4,3,30],
+    ["Crème fraîche légère 15%",100,"g",160,3,4,15],
+    ["Emmental",100,"g",380,28,0,30],
+    ["Camembert",100,"g",300,20,0.5,24],
+    ["Comté",100,"g",410,27,0,34],
+    ["Mozzarella",100,"g",280,22,2,22],
+    ["Parmesan",100,"g",431,38,4,29],
+    ["Roquefort",100,"g",369,19,2,31],
+    ["Chèvre",100,"g",364,22,2,30],
+    ["Feta",100,"g",264,14,4,21],
+    ["Ricotta",100,"g",174,11,3,13],
+    ["Cheddar",100,"g",402,25,1.3,33],
+    ["Cottage cheese",100,"g",98,11,3.4,4.3],
+    ["Crème dessert",100,"g",120,3,20,3],
+    ["Petit-suisse",100,"g",95,9,4,4.5],
+    ["Riz cuit",100,"g",130,2.7,28,0.3],
+    ["Riz complet cuit",100,"g",111,2.6,23,0.9],
+    ["Pâtes cuites",100,"g",158,6,31,1],
+    ["Pâtes complètes cuites",100,"g",124,5,26,0.5],
+    ["Quinoa cuit",100,"g",120,4.4,21,1.9],
+    ["Boulgour cuit",100,"g",83,3,19,0.2],
+    ["Semoule cuite",100,"g",112,3.8,23,0.2],
+    ["Couscous cuit",100,"g",112,3.8,23,0.2],
+    ["Lentilles cuites",100,"g",116,9,20,0.4],
+    ["Pois chiches cuits",100,"g",164,9,27,2.6],
+    ["Haricots rouges cuits",100,"g",127,9,23,0.5],
+    ["Flocons d'avoine",100,"g",389,17,66,7],
+    ["Pain",100,"g",265,9,49,3.2],
+    ["Baguette",100,"g",270,9,55,1.3],
+    ["Pain complet",100,"g",247,9,41,3.4],
+    ["Pain de mie",100,"g",280,8,50,4.5],
+    ["Biscotte",100,"g",410,12,75,6],
+    ["Corn flakes",100,"g",357,7,84,0.9],
+    ["Muesli",100,"g",360,10,60,8],
+    ["Farine de blé",100,"g",364,10,76,1],
+    ["Polenta cuite",100,"g",85,2,18,0.4],
+    ["Gnocchi",100,"g",160,4,32,2],
+    ["Blé (Ebly) cuit",100,"g",120,4,25,0.5],
+    ["Amandes",100,"g",579,21,22,50],
+    ["Noix",100,"g",654,15,14,65],
+    ["Noisettes",100,"g",628,15,17,61],
+    ["Cacahuètes",100,"g",567,26,16,49],
+    ["Noix de cajou",100,"g",553,18,30,44],
+    ["Pistaches",100,"g",560,20,28,45],
+    ["Graines de courge",100,"g",559,30,11,49],
+    ["Graines de tournesol",100,"g",584,21,20,51],
+    ["Graines de chia",100,"g",486,17,42,31],
+    ["Graines de lin",100,"g",534,18,29,42],
+    ["Beurre de cacahuète",100,"g",588,25,20,50],
+    ["Tofu",100,"g",76,8,1.9,4.8],
+    ["Tempeh",100,"g",192,20,8,11],
+    ["Edamame",100,"g",121,12,9,5],
+    ["Pois cassés cuits",100,"g",118,8,21,0.4],
+    ["Huile d'olive",100,"ml",884,0,0,100],
+    ["Huile de tournesol",100,"ml",884,0,0,100],
+    ["Huile de coco",100,"g",862,0,0,100],
+    ["Margarine",100,"g",717,0.2,0.7,80],
+    ["Mayonnaise",100,"g",680,1,1.5,75],
+    ["Croissant",100,"g",406,8,46,21],
+    ["Pain au chocolat",100,"g",414,8,44,23],
+    ["Brioche",100,"g",350,8,50,13],
+    ["Crêpe",100,"g",219,6,28,9],
+    ["Gaufre",100,"g",290,6,38,13],
+    ["Biscuit sablé",100,"g",480,6,65,22],
+    ["Chocolat noir",100,"g",546,5,61,31],
+    ["Chocolat au lait",100,"g",535,7,59,30],
+    ["Pâte à tartiner",100,"g",539,6,57,31],
+    ["Confiture",100,"g",250,0.5,60,0.1],
+    ["Miel",100,"g",304,0.3,82,0],
+    ["Sucre",100,"g",400,0,100,0],
+    ["Glace vanille",100,"g",207,3.5,24,11],
+    ["Madeleine",100,"g",440,6,52,22],
+    ["Cookie",100,"g",471,5,64,22],
+    ["Pizza margherita",100,"g",266,11,33,10],
+    ["Frites",100,"g",312,3.4,41,15],
+    ["Hamburger",100,"g",250,13,28,10],
+    ["Quiche lorraine",100,"g",280,10,20,18],
+    ["Lasagnes",100,"g",135,7,13,6],
+    ["Hummus",100,"g",166,8,14,10],
+    ["Soupe de légumes",100,"ml",40,1.5,7,0.8],
+    ["Ketchup",100,"g",112,1.2,26,0.1],
+    ["Moutarde",100,"g",66,4,5,4],
+    ["Sauce tomate",100,"g",35,1.6,7,0.3],
+    ["Olives",100,"g",145,1,4,15],
+    ["Cornichon",100,"g",11,0.5,2.3,0.2],
+    ["Pesto",100,"g",450,5,6,45],
+    ["Vinaigrette",100,"g",450,0.5,5,48],
+    ["Jus d'orange",100,"ml",45,0.7,10,0.2],
+    ["Jus de pomme",100,"ml",46,0.1,11,0.1],
+    ["Coca-cola",100,"ml",42,0,10.6,0],
+    ["Bière",100,"ml",43,0.5,3.6,0],
+    ["Vin rouge",100,"ml",85,0.1,2.6,0],
+    ["Café noir",100,"ml",2,0.1,0,0],
+    ["Thé",100,"ml",1,0,0.2,0],
+    ["Smoothie",100,"ml",60,1,13,0.5],
+    ["Lait d'amande",100,"ml",24,0.5,3,1.1],
+    ["Lait de soja",100,"ml",43,3.3,2.5,1.8],
+    ["Mandarine",100,"g",53,0.8,13,0.3],
+    ["Litchi",100,"g",66,0.8,17,0.4],
+    ["Papaye",100,"g",43,0.5,11,0.3],
+    ["Kaki",100,"g",70,0.6,18,0.2],
+    ["Mûre",100,"g",43,1.4,10,0.5],
+    ["Groseille",100,"g",56,1.4,14,0.2],
+    ["Fruit de la passion",100,"g",97,2.2,23,0.7],
+    ["Rhubarbe",100,"g",21,0.9,4.5,0.2],
+    ["Coing",100,"g",57,0.4,15,0.1],
+    ["Goyave",100,"g",68,2.6,14,1],
+    ["Noix de coco (chair)",100,"g",354,3.3,15,33],
+    ["Pruneau",100,"g",240,2.2,64,0.4],
+    ["Raisin sec",100,"g",299,3.1,79,0.5],
+    ["Abricot sec",100,"g",241,3.4,63,0.5],
+    ["Figue sèche",100,"g",249,3.3,64,0.9],
+    ["Cranberry séchée",100,"g",308,0.1,82,1.4],
+    ["Pomelo",100,"g",38,0.8,10,0.1],
+    ["Mûre sauvage",100,"g",43,1.4,10,0.5],
+    ["Courge butternut",100,"g",45,1,12,0.1],
+    ["Panais",100,"g",75,1.2,18,0.3],
+    ["Topinambour",100,"g",73,2,17,0.01],
+    ["Blette",100,"g",19,1.8,3.7,0.2],
+    ["Cresson",100,"g",11,2.6,1.3,0.1],
+    ["Roquette",100,"g",25,2.6,3.7,0.7],
+    ["Mâche",100,"g",21,2,3.6,0.4],
+    ["Chou rouge",100,"g",31,1.4,7,0.2],
+    ["Chou kale",100,"g",49,4.3,9,0.9],
+    ["Chou romanesco",100,"g",25,2.5,5,0.3],
+    ["Échalote",100,"g",72,2.5,17,0.1],
+    ["Gingembre",100,"g",80,1.8,18,0.8],
+    ["Cœur de palmier",100,"g",28,2.5,4.6,0.2],
+    ["Pousse de soja",100,"g",31,3,4.4,0.2],
+    ["Shiitaké",100,"g",34,2.2,7,0.5],
+    ["Chou-rave",100,"g",27,1.7,6,0.1],
+    ["Salsifis",100,"g",82,3.3,18,0.2],
+    ["Patidou",100,"g",40,1,9,0.1],
+    ["Mortadelle",100,"g",311,16,1,27],
+    ["Salami",100,"g",336,22,1,27],
+    ["Coppa",100,"g",350,24,1,28],
+    ["Pancetta",100,"g",458,12,0,45],
+    ["Jambon de Bayonne",100,"g",240,28,1,14],
+    ["Jambon cru (Serrano)",100,"g",241,31,0,13],
+    ["Magret de canard",100,"g",290,18,0,24],
+    ["Foie gras",100,"g",450,8,4,44],
+    ["Boudin noir",100,"g",379,15,2,35],
+    ["Andouille",100,"g",214,18,3,15],
+    ["Pâté de campagne",100,"g",290,13,2,25],
+    ["Rillettes",100,"g",450,13,0,44],
+    ["Terrine",100,"g",300,14,2,26],
+    ["Escalope de veau",100,"g",172,24,0,8],
+    ["Rôti de porc",100,"g",210,28,0,11],
+    ["Gigot d'agneau",100,"g",230,26,0,14],
+    ["Lapin",100,"g",173,21,0,9],
+    ["Pintade",100,"g",158,25,0,6],
+    ["Viande de kebab",100,"g",215,18,3,14],
+    ["Lotte",100,"g",76,16,0,1],
+    ["Dorade",100,"g",96,18,0,2.5],
+    ["Rouget",100,"g",109,18,0,4],
+    ["Anchois",100,"g",131,20,0,5],
+    ["Espadon",100,"g",144,20,0,7],
+    ["Flétan",100,"g",110,21,0,2.5],
+    ["Églefin",100,"g",90,20,0,0.7],
+    ["Huître",100,"g",81,9,4,2],
+    ["Coquille Saint-Jacques",100,"g",88,17,3,0.8],
+    ["Langoustine",100,"g",90,18,0,1.5],
+    ["Homard",100,"g",90,19,0.5,1],
+    ["Poulpe",100,"g",82,15,2,1],
+    ["Seiche",100,"g",81,16,1,0.7],
+    ["Bulot",100,"g",138,24,8,0.4],
+    ["Escargot",100,"g",90,16,2,1.4],
+    ["Tarama",100,"g",480,9,4,47],
+    ["Œufs de saumon",100,"g",250,29,3,13],
+    ["Kéfir",100,"ml",55,3.3,4.7,2.5],
+    ["Fromage frais (St Môret)",100,"g",230,7,3,21],
+    ["Boursin",100,"g",404,6,2,40],
+    ["Vache qui rit",100,"g",267,10,7,22],
+    ["Babybel",100,"g",299,23,0,23],
+    ["Raclette",100,"g",357,23,0.5,28],
+    ["Reblochon",100,"g",330,20,0,27],
+    ["Brie",100,"g",334,19,0.5,28],
+    ["Munster",100,"g",330,20,0,27],
+    ["Gruyère",100,"g",413,30,0,33],
+    ["Gouda",100,"g",356,25,2,27],
+    ["Bleu d'Auvergne",100,"g",354,20,0,30],
+    ["Mascarpone",100,"g",355,4,4,37],
+    ["Yaourt aux fruits",100,"g",95,3.4,15,2.5],
+    ["Beurre allégé",100,"g",530,0.5,0.5,58],
+    ["Cancoillotte",100,"g",125,9,4,8],
+    ["Petit-suisse aux fruits",100,"g",130,7,15,4],
+    ["Œuf dur",1,"pièce",78,6,0.6,5],
+    ["Omelette",100,"g",154,11,1,12],
+    ["Œuf de caille",1,"pièce",14,1.2,0,1],
+    ["Huile de colza",100,"ml",884,0,0,100],
+    ["Huile de noix",100,"ml",884,0,0,100],
+    ["Huile de sésame",100,"ml",884,0,0,100],
+    ["Graisse de canard",100,"g",897,0,0,99],
+    ["Saindoux",100,"g",899,0,0,100],
+    ["Ghee",100,"g",900,0,0,100],
+    ["Haricots blancs cuits",100,"g",139,9,25,0.5],
+    ["Flageolets cuits",100,"g",130,8,22,0.6],
+    ["Fèves cuites",100,"g",110,8,20,0.4],
+    ["Lentilles corail cuites",100,"g",116,9,20,0.4],
+    ["Épeautre cuit",100,"g",127,5,26,0.9],
+    ["Orge cuit",100,"g",123,2.3,28,0.4],
+    ["Millet cuit",100,"g",119,3.5,23,1],
+    ["Sarrasin cuit",100,"g",92,3.4,20,0.6],
+    ["Son d'avoine",100,"g",246,17,66,7],
+    ["Pain pita",100,"g",275,9,55,1.2],
+    ["Pain naan",100,"g",310,9,50,9],
+    ["Tortilla (wrap)",100,"g",310,8,50,8],
+    ["Pain burger",100,"g",290,9,49,5],
+    ["Crackers",100,"g",440,9,68,14],
+    ["Pain d'épices",100,"g",350,4,75,4],
+    ["Riz basmati cuit",100,"g",120,3,25,0.4],
+    ["Pop-corn",100,"g",387,12,78,4],
+    ["Chapelure",100,"g",380,13,72,3],
+    ["Noix de pécan",100,"g",691,9,14,72],
+    ["Noix du Brésil",100,"g",659,14,12,67],
+    ["Noix de macadamia",100,"g",718,8,14,76],
+    ["Pignons de pin",100,"g",673,14,13,68],
+    ["Graines de sésame",100,"g",573,18,23,50],
+    ["Purée d'amande",100,"g",614,21,19,56],
+    ["Pain aux raisins",100,"g",340,7,50,13],
+    ["Chausson aux pommes",100,"g",330,4,40,17],
+    ["Éclair",100,"g",280,6,30,15],
+    ["Macaron",100,"g",400,7,60,15],
+    ["Financier",100,"g",450,8,50,24],
+    ["Cannelé",100,"g",330,6,55,9],
+    ["Tarte aux pommes",100,"g",240,3,35,10],
+    ["Tarte au citron",100,"g",300,4,40,14],
+    ["Mille-feuille",100,"g",355,5,38,20],
+    ["Beignet",100,"g",340,6,45,16],
+    ["Donut",100,"g",420,5,51,22],
+    ["Muffin",100,"g",380,5,50,18],
+    ["Brownie",100,"g",460,6,55,25],
+    ["Cheesecake",100,"g",320,6,30,20],
+    ["Tiramisu",100,"g",260,5,25,16],
+    ["Mousse au chocolat",100,"g",230,4,25,13],
+    ["Crème brûlée",100,"g",290,4,25,20],
+    ["Riz au lait",100,"g",130,3.5,20,4],
+    ["Panna cotta",100,"g",250,3,22,17],
+    ["Sorbet",100,"g",130,0.5,32,0.2],
+    ["Barre chocolatée",100,"g",480,5,65,21],
+    ["Bonbon",100,"g",380,0,95,0],
+    ["Marshmallow",100,"g",318,1.8,81,0.2],
+    ["Nougat",100,"g",398,5,72,11],
+    ["Spéculoos",100,"g",475,6,70,18],
+    ["Petit-beurre",100,"g",440,7,75,12],
+    ["Palmier (biscuit)",100,"g",500,6,60,26],
+    ["Galette bretonne",100,"g",500,6,65,24],
+    ["Pâte à crêpe",100,"g",185,6,28,5],
+    ["Crème pâtissière",100,"g",150,3,22,5],
+    ["Chocolat en poudre",100,"g",375,5,82,3],
+    ["Céréales chocolatées",100,"g",380,7,80,4],
+    ["Granola",100,"g",450,9,65,16],
+    ["Barre de céréales",100,"g",400,6,70,11],
+    ["Hachis parmentier",100,"g",120,6,12,5],
+    ["Gratin dauphinois",100,"g",160,4,14,10],
+    ["Ratatouille",100,"g",55,1.3,7,2.5],
+    ["Couscous (plat)",100,"g",130,6,18,3.5],
+    ["Paella",100,"g",150,8,18,5],
+    ["Risotto",100,"g",165,4,22,6],
+    ["Blanquette de veau",100,"g",130,11,4,8],
+    ["Bœuf bourguignon",100,"g",140,14,5,7],
+    ["Pot-au-feu",100,"g",90,10,5,3.5],
+    ["Choucroute",100,"g",135,7,5,9],
+    ["Cassoulet",100,"g",150,9,13,7],
+    ["Tartiflette",100,"g",180,6,12,12],
+    ["Croque-monsieur",100,"g",280,14,22,15],
+    ["Sandwich jambon-beurre",100,"g",250,9,30,10],
+    ["Cordon bleu",100,"g",250,15,16,14],
+    ["Nuggets de poulet",100,"g",270,15,16,16],
+    ["Nem",100,"g",210,7,22,10],
+    ["Sushi",100,"g",140,5,28,1],
+    ["Maki",100,"g",145,4,30,1],
+    ["Pad thaï",100,"g",160,7,22,5],
+    ["Curry de poulet",100,"g",130,11,7,6],
+    ["Dahl de lentilles",100,"g",120,6,16,3.5],
+    ["Chili con carne",100,"g",130,9,12,4],
+    ["Tacos",100,"g",220,9,24,10],
+    ["Burrito",100,"g",210,8,26,8],
+    ["Falafel",100,"g",330,13,32,18],
+    ["Brochette de poulet",100,"g",165,28,2,5],
+    ["Samoussa",100,"g",260,7,28,13],
+    ["Gyoza",100,"g",200,8,24,8],
+    ["Ramen",100,"g",110,5,15,3],
+    ["Cordon bleu de dinde",100,"g",230,16,15,12],
+    ["Bo bun",100,"g",150,8,20,4],
+    ["Soupe à l'oignon",100,"ml",45,1.5,6,1.5],
+    ["Velouté de tomate",100,"ml",55,1.2,8,2],
+    ["Gaspacho",100,"ml",37,1,5,1.5],
+    ["Béchamel",100,"g",130,4,10,8],
+    ["Sauce bolognaise",100,"g",95,6,7,4.5],
+    ["Sauce soja",100,"ml",60,6,6,0.1],
+    ["Sauce barbecue",100,"g",170,1,40,0.5],
+    ["Sauce aigre-douce",100,"g",150,0.5,36,0.2],
+    ["Harissa",100,"g",90,3,12,3],
+    ["Tapenade",100,"g",340,3,5,34],
+    ["Guacamole",100,"g",155,2,8,13],
+    ["Vinaigre",100,"ml",20,0,1,0],
+    ["Cube de bouillon",100,"g",230,12,18,12],
+    ["Crème de balsamique",100,"ml",200,0.5,48,0.2],
+    ["Eau",100,"ml",0,0,0,0],
+    ["Eau gazeuse",100,"ml",0,0,0,0],
+    ["Limonade",100,"ml",40,0,10,0],
+    ["Ice tea",100,"ml",30,0,7.5,0],
+    ["Sirop (dilué)",100,"ml",45,0,11,0],
+    ["Jus multifruit",100,"ml",48,0.3,11,0.1],
+    ["Jus de raisin",100,"ml",60,0.3,15,0.1],
+    ["Jus d'ananas",100,"ml",53,0.4,13,0.1],
+    ["Jus de tomate",100,"ml",17,0.8,3.5,0.1],
+    ["Red Bull",100,"ml",45,0,11,0],
+    ["Café au lait",100,"ml",30,1.8,2.6,1.2],
+    ["Cappuccino",100,"ml",40,2,4,1.5],
+    ["Chocolat chaud",100,"ml",80,3,12,2.5],
+    ["Vin blanc",100,"ml",82,0.1,2.6,0],
+    ["Vin rosé",100,"ml",80,0.1,2.5,0],
+    ["Champagne",100,"ml",80,0.2,1.4,0],
+    ["Cidre",100,"ml",45,0,5,0],
+    ["Milkshake",100,"ml",110,3,18,3],
+    ["Lait de coco",100,"ml",230,2.3,6,24],
+    ["Eau de coco",100,"ml",19,0.7,3.7,0.2],
+    ["Lait d'avoine",100,"ml",45,1,7,1.5],
+    ["Smoothie banane",100,"ml",75,1.2,16,0.6],
+    ["Kombucha",100,"ml",30,0,7,0],
+    ["Steak végétal",100,"g",180,17,6,9],
+    ["Galette de légumes",100,"g",170,5,18,8],
+    ["Seitan",100,"g",140,25,5,2],
+    ["Yaourt au soja",100,"g",50,4,4,2],
+    ["Crème de soja",100,"ml",180,3,3,17],
+    ["Protéine de pois (poudre)",100,"g",380,80,5,5],
+    ["Compote de pomme",100,"g",60,0.2,15,0.1],
+    ["Compote sans sucre",100,"g",45,0.3,11,0.1],
+    ["Whey (poudre)",100,"g",380,75,8,6],
+    ["Galette de riz",100,"g",380,8,82,3]
+    ];;
+function foodSeed(){ return FOOD_RAW.map(function(r){ return {nom:r[0],base:r[1],unit:r[2],kcal:r[3],p:r[4],g:r[5],l:r[6]}; }); }
+var MEALS=["Petit-déjeuner","Déjeuner","Dîner","Collation"];
+function fr1(n){ return Math.round((n||0)*10)/10; }
+var __foodlib=null;
+function loadFoodLib(){
+  if(__foodlib) return Promise.resolve(__foodlib);
+  var local=readLS("v2_foodlib");
+  return cloudGet("v2:__foodlib").then(function(cloud){
+    var lib;
+    if(cloud && (cloud.v||0)>=SEED_VERSION){ lib=cloud; writeLS("v2_foodlib",lib); }
+    else { lib={foods:foodSeed(),v:SEED_VERSION,_mtime:Date.now()}; writeLS("v2_foodlib",lib); cloudPut("v2:__foodlib",lib); }
+    __foodlib=lib; return lib;
+  }).catch(function(){ __foodlib=local||{foods:foodSeed(),v:SEED_VERSION}; return __foodlib; });
+}
+function addFood(food){
+  return loadFoodLib().then(function(lib){
+    var norm=(food.nom||"").trim().toLowerCase();
+    var ex=lib.foods.filter(function(f){ return (f.nom||"").trim().toLowerCase()===norm; })[0];
+    if(ex) Object.assign(ex,food); else lib.foods.push(food);
+    lib.v=SEED_VERSION; lib._mtime=Date.now(); writeLS("v2_foodlib",lib);
+    return cloudPut("v2:__foodlib",lib).then(function(){ return food; });
+  });
+}
+
+function loadScriptOnce(src){ return new Promise(function(res,rej){ var e=document.querySelector('script[data-src="'+src+'"]'); if(e){ if(e.getAttribute("data-loaded"))res(); else { e.addEventListener("load",function(){res();}); e.addEventListener("error",rej);} return;} var s=document.createElement("script"); s.src=src; s.setAttribute("data-src",src); s.onload=function(){ s.setAttribute("data-loaded","1"); res(); }; s.onerror=rej; document.head.appendChild(s); }); }
+function ensureZXing(){ if(window.ZXingBrowser) return Promise.resolve(window.ZXingBrowser); return loadScriptOnce("https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js").then(function(){ return window.ZXingBrowser; }); }
+function lookupOFF(code){
+  var url="https://world.openfoodfacts.org/api/v2/product/"+encodeURIComponent(code)+".json?fields=product_name,product_name_fr,brands,image_front_small_url,nutriments,nutriscore_grade,nova_group,ingredients_text_fr,ingredients_text,allergens,quantity";
+  return fetch(url).then(function(r){return r.json();}).then(function(d){
+    if(!d||d.status!==1||!d.product) return null;
+    var p=d.product,n=p.nutriments||{}; var kcal=n["energy-kcal_100g"]; if(kcal==null&&n["energy_100g"]!=null) kcal=n["energy_100g"]/4.184;
+    return { code:code, nom:((p.product_name_fr||p.product_name||"").trim())||("Produit "+code), brand:((p.brands||"").split(",")[0]||"").trim(), image:p.image_front_small_url||"", kcal:Math.round(kcal||0), p:+(n.proteins_100g||0), g:+(n.carbohydrates_100g||0), l:+(n.fat_100g||0), nutriscore:(p.nutriscore_grade||"").toUpperCase(), nova:p.nova_group||null, ingredients:(p.ingredients_text_fr||p.ingredients_text||"").trim(), allergens:(p.allergens||"").replace(/[a-z]{2}:/g,"").replace(/,/g,", ").trim(), quantity:(p.quantity||"").trim() };
+  });
+}
+
+function openFoodJournal(c, isSelf){
+  clear(); topbar("Journal alimentaire", c.nom, function(){ openClient(c.id,isSelf); });
+  c.journal=c.journal||[]; var day=today();
+  var entries=c.journal.filter(function(e){ return !e.del && e.date===day; });
+  var tot={kcal:0,p:0,g:0,l:0}; entries.forEach(function(e){ tot.kcal+=e.kcal||0; tot.p+=e.p||0; tot.g+=e.g||0; tot.l+=e.l||0; });
+  var target=(c.cibles&&c.cibles.basale)||null;
+  var head=el("div","card center");
+  head.innerHTML='<div class="eyebrow">'+frDate()+'</div><div style="font-size:34px;font-weight:800;margin:8px 0 2px;color:var(--gold)">'+Math.round(tot.kcal)+(target?' / '+target:'')+'</div><div class="muted">kcal'+(target?" (objectif)":"")+'</div><div class="muted" style="font-size:12px;margin-top:8px">P '+fr1(tot.p)+'g · G '+fr1(tot.g)+'g · L '+fr1(tot.l)+'g</div>';
+  if(target){ var bw=el("div"); bw.style.cssText="height:8px;border-radius:8px;background:var(--surf);margin-top:12px;overflow:hidden"; var fl=el("div"); fl.style.cssText="height:100%;width:"+Math.min(100,tot.kcal/target*100)+"%;background:linear-gradient(90deg,var(--gold),var(--ok))"; bw.appendChild(fl); head.appendChild(bw); }
+  app.appendChild(head);
+  var add=el("button","btn primary block","+ Ajouter un aliment"); add.style.marginBottom="14px"; app.appendChild(add);
+  add.onclick=function(){ openFoodLib(function(){ openFoodJournal(c,isSelf); }, function(food){ qtyAdd(food,c,isSelf); }); };
+  MEALS.forEach(function(meal){
+    var list=entries.filter(function(e){return e.meal===meal;}); if(!list.length) return;
+    var card=el("div","card"); card.appendChild(el("div","eyebrow",meal)); var sp=el("div"); sp.style.height="8px"; card.appendChild(sp);
+    list.forEach(function(e){ var row=el("div","line");
+      var k=el("span","k"); k.innerHTML=esc(e.nom)+' <span style="opacity:.55">'+e.qty+e.unit+'</span>';
+      var rt=el("span"); rt.style.cssText="display:flex;align-items:center;gap:6px"; var val=el("span","v"); val.textContent=Math.round(e.kcal)+" kcal";
+      var del=el("button","back"); del.textContent="✕"; del.style.cssText="font-size:11px;padding:3px 8px";
+      del.onclick=function(){ var x=c.journal.filter(function(y){return y.id===e.id;})[0]; if(x){x.del=true;x._ts=Date.now();} saveClient(c).then(function(m){Object.assign(c,m); openFoodJournal(c,isSelf);}); };
+      rt.appendChild(val); rt.appendChild(del); row.appendChild(k); row.appendChild(rt); card.appendChild(row);
+    });
+    app.appendChild(card);
+  });
+  if(!entries.length) app.appendChild(el("div","card center muted","Rien pour aujourd'hui. Ajoute un aliment."));
+}
+
+function qtyAdd(food, c, isSelf){
+  clear(); topbar("Ajouter au journal", food.nom, function(){ openFoodJournal(c,isSelf); });
+  var card=el("div","card");
+  var qty=input(food.base||100,{type:"number",inputmode:"decimal"});
+  var meal=el("select","inp"); MEALS.forEach(function(mm){var o=document.createElement("option");o.value=mm;o.textContent=mm;meal.appendChild(o);});
+  card.appendChild(field("Quantité ("+(food.unit||"g")+")", qty));
+  card.appendChild(field("Repas", meal));
+  var calc=el("div","muted"); calc.style.cssText="font-size:13px;margin:2px 0 12px";
+  function recalc(){ var f=(num(qty.value)||0)/(food.base||100); calc.textContent=Math.round(food.kcal*f)+" kcal · P "+fr1(food.p*f)+" · G "+fr1(food.g*f)+" · L "+fr1(food.l*f); }
+  qty.addEventListener("input",recalc); recalc(); card.appendChild(calc);
+  var addb=el("button","btn primary block","Ajouter"); card.appendChild(addb); app.appendChild(card);
+  addb.onclick=function(){ var f=(num(qty.value)||0)/(food.base||100); var e={id:genId(),date:today(),meal:meal.value,nom:food.nom,qty:num(qty.value)||0,unit:food.unit||"g",kcal:Math.round(food.kcal*f),p:fr1(food.p*f),g:fr1(food.g*f),l:fr1(food.l*f),_ts:Date.now()}; c.journal=(c.journal||[]).concat([e]); addb.disabled=true; addb.textContent="Ajout…"; saveClient(c).then(function(m){ Object.assign(c,m); toast("Ajouté au journal"); openFoodJournal(c,isSelf); }); };
+}
+
+function openFoodLib(backFn, onPickFood){
+  clear(); topbar("Bibliothèque", "Aliments", backFn);
+  var bar=el("div","row"); bar.style.marginBottom="10px";
+  var search=input("",{placeholder:"Chercher un aliment…"}); search.style.flex="1"; search.style.minWidth="0";
+  var scan=el("button","btn ghost","📷"); scan.style.padding="12px 14px";
+  bar.appendChild(search); bar.appendChild(scan); app.appendChild(bar);
+  var addBtn=el("button","btn line block","+ Créer un aliment"); addBtn.style.marginBottom="12px"; app.appendChild(addBtn);
+  var listWrap=el("div"); app.appendChild(listWrap);
+  listWrap.appendChild(el("div","muted center","Chargement…"));
+  scan.onclick=function(){ openBarcode(function(){ openFoodLib(backFn,onPickFood); }, onPickFood); };
+  addBtn.onclick=function(){ foodForm(function(){ openFoodLib(backFn,onPickFood); }); };
+  loadFoodLib().then(function(lib){
+    function paint(){
+      var q=(search.value||"").trim().toLowerCase();
+      var foods=lib.foods.filter(function(f){ return !q||(f.nom||"").toLowerCase().indexOf(q)>-1; }).slice(0,40);
+      listWrap.innerHTML="";
+      if(!foods.length){ listWrap.appendChild(el("div","card center muted","Aucun aliment. Crée-le ci-dessus.")); return; }
+      foods.forEach(function(f){
+        var card=el("div","card"); card.style.cssText+=";cursor:pointer;padding:13px 16px";
+        card.innerHTML='<div style="display:flex;justify-content:space-between;gap:10px"><div style="font-weight:600">'+esc(f.nom)+'</div><div class="muted" style="font-size:12px;white-space:nowrap">'+f.kcal+' kcal /'+f.base+f.unit+'</div></div><div class="muted" style="font-size:11px;margin-top:3px">P '+f.p+' · G '+f.g+' · L '+f.l+'</div>';
+        card.onclick=function(){ if(onPickFood) onPickFood(f); };
+        listWrap.appendChild(card);
+      });
+    }
+    search.addEventListener("input",paint); paint();
+  });
+}
+
+function foodForm(backFn){
+  clear(); topbar("Créer un aliment", "Bibliothèque", backFn);
+  var card=el("div","card");
+  var nom=input("",{placeholder:"Nom de l'aliment"});
+  var kcal=input("",{type:"number",inputmode:"decimal",placeholder:"kcal"});
+  var p=input("",{type:"number",inputmode:"decimal"}); var g=input("",{type:"number",inputmode:"decimal"}); var l=input("",{type:"number",inputmode:"decimal"});
+  card.appendChild(field("Nom", nom));
+  card.appendChild(field("Calories (pour 100 g)", kcal));
+  var three=el("div"); three.style.cssText="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px"; three.appendChild(field("Prot. (g)",p)); three.appendChild(field("Gluc. (g)",g)); three.appendChild(field("Lip. (g)",l)); card.appendChild(three);
+  var save=el("button","btn primary block","Enregistrer"); card.appendChild(save); app.appendChild(card);
+  save.onclick=function(){ var n=(nom.value||"").trim(); if(!n){toast("Indique un nom.");return;} save.disabled=true; save.textContent="Enregistrement…"; addFood({nom:n,base:100,unit:"g",kcal:Math.round(num(kcal.value)||0),p:num(p.value)||0,g:num(g.value)||0,l:num(l.value)||0}).then(function(){ toast("Aliment créé"); backFn(); }); };
+}
+
+function renderProduct(prod, host, onPickFood, backFn){
+  host.innerHTML="";
+  var top=el("div"); top.style.cssText="display:flex;gap:12px;align-items:flex-start;margin-bottom:12px";
+  if(prod.image){ var im=document.createElement("img"); im.src=prod.image; im.style.cssText="width:60px;height:60px;object-fit:contain;border-radius:10px;background:#fff;flex-shrink:0"; top.appendChild(im); }
+  var ti=el("div"); ti.innerHTML='<div style="font-weight:800">'+esc(prod.nom)+'</div>'+(prod.brand?'<div class="muted" style="font-size:12px;margin-top:2px">'+esc(prod.brand)+(prod.quantity?" · "+esc(prod.quantity):"")+'</div>':''); top.appendChild(ti);
+  var card=el("div","card"); card.appendChild(top);
+  var nut=el("div"); nut.style.cssText="background:var(--surf);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:12px";
+  nut.innerHTML='<div class="eyebrow" style="margin-bottom:6px">Pour 100 g</div>'
+    +'<div class="line"><span class="k">Calories</span><span class="v">'+prod.kcal+' kcal</span></div>'
+    +'<div class="line"><span class="k">Protéines</span><span class="v">'+prod.p+' g</span></div>'
+    +'<div class="line"><span class="k">Glucides</span><span class="v">'+prod.g+' g</span></div>'
+    +'<div class="line"><span class="k">Lipides</span><span class="v">'+prod.l+' g</span></div>'
+    +(prod.nutriscore&&"ABCDE".indexOf(prod.nutriscore)>-1?'<div class="line"><span class="k">Nutri-Score</span><span class="v">'+prod.nutriscore+'</span></div>':'')
+    +(prod.nova?'<div class="line"><span class="k">Transformation</span><span class="v">NOVA '+prod.nova+'</span></div>':'');
+  card.appendChild(nut);
+  if(prod.allergens){ var al=el("div"); al.style.cssText="font-size:12px;color:var(--orange);margin-bottom:10px"; al.textContent="⚠️ Allergènes : "+prod.allergens; card.appendChild(al); }
+  var foodObj={nom:(prod.brand?prod.brand+" — ":"")+prod.nom, base:100, unit:"g", kcal:prod.kcal, p:prod.p, g:prod.g, l:prod.l};
+  var btns=el("div","wrap");
+  var bLib=el("button","btn line","➕ Bibliothèque"); bLib.style.flex="1"; bLib.onclick=function(){ addFood(foodObj).then(function(){ bLib.textContent="✓ Ajouté"; }); };
+  btns.appendChild(bLib);
+  if(onPickFood){ var bJ=el("button","btn primary","Au journal"); bJ.style.flex="1"; bJ.onclick=function(){ onPickFood(foodObj); }; btns.appendChild(bJ); }
+  card.appendChild(btns); host.appendChild(card);
+}
+
+function openBarcode(backFn, onPickFood){
+  clear(); topbar("Scan code-barres","Open Food Facts", backFn);
+  var intro=el("div","muted"); intro.style.cssText="font-size:12px;margin-bottom:12px;line-height:1.5"; intro.textContent="Scanne ou tape un code-barres : infos produit, puis ajoute-le à la bibliothèque ou au journal."; app.appendChild(intro);
+  var bar=el("div","row"); bar.style.marginBottom="10px";
+  var inp=input("",{type:"tel",placeholder:"Code-barres (chiffres)"}); inp.style.flex="1"; inp.style.minWidth="0";
+  var go=el("button","btn primary","Chercher"); bar.appendChild(inp); bar.appendChild(go); app.appendChild(bar);
+  var camBtn=el("button","btn line block","📷 Scanner avec la caméra"); camBtn.style.marginBottom="12px"; app.appendChild(camBtn);
+  var status=el("div","muted"); status.style.cssText="font-size:12px;margin-bottom:10px"; app.appendChild(status);
+  var video=document.createElement("video"); video.setAttribute("playsinline",""); video.muted=true; video.style.cssText="width:100%;border-radius:12px;border:1px solid var(--border);display:none;margin-bottom:12px"; app.appendChild(video);
+  var result=el("div"); app.appendChild(result);
+  var ctl={stream:null,reader:null,raf:0};
+  function stopCam(){ if(ctl.raf){cancelAnimationFrame(ctl.raf);ctl.raf=0;} if(ctl.reader){try{ctl.reader.reset();}catch(e){}ctl.reader=null;} if(ctl.stream){ctl.stream.getTracks().forEach(function(t){t.stop();});ctl.stream=null;} video.style.display="none"; }
+  function doLookup(code){ status.textContent="Recherche du produit…"; result.innerHTML=""; lookupOFF(code).then(function(prod){ if(!prod){ status.textContent="Produit introuvable pour "+code+". Tu peux le créer à la main."; return; } status.textContent="✓ "+code; renderProduct(prod,result,onPickFood,backFn); }).catch(function(){ status.textContent="Connexion requise pour interroger la base produits."; }); }
+  go.onclick=function(){ var c=(inp.value||"").replace(/\D/g,""); if(c.length<6){status.textContent="Entre un code valide.";return;} stopCam(); doLookup(c); };
+  inp.addEventListener("keydown",function(e){ if(e.key==="Enter") go.onclick(); });
+  camBtn.onclick=function(){ if(ctl.stream){ stopCam(); camBtn.textContent="📷 Scanner avec la caméra"; status.textContent=""; return; } status.textContent="Démarrage caméra…"; navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}}).then(function(stream){ ctl.stream=stream; video.srcObject=stream; video.style.display="block"; video.play(); camBtn.textContent="⏹ Arrêter la caméra"; function onCode(code){ stopCam(); camBtn.textContent="📷 Scanner avec la caméra"; doLookup((""+code).replace(/\D/g,"")); } if("BarcodeDetector" in window){ var det=new window.BarcodeDetector({formats:["ean_13","ean_8","upc_a","upc_e","code_128"]}); status.textContent="Vise le code-barres…"; (function loop(){ if(!ctl.stream)return; det.detect(video).then(function(cs){ if(cs&&cs.length){onCode(cs[0].rawValue);return;} ctl.raf=requestAnimationFrame(loop); }).catch(function(){ctl.raf=requestAnimationFrame(loop);}); })(); } else { status.textContent="Chargement du lecteur…"; ensureZXing().then(function(ZB){ status.textContent="Vise le code-barres…"; ctl.reader=new ZB.BrowserMultiFormatReader(); ctl.reader.decodeFromStream(ctl.stream,video,function(res){ if(res) onCode(res.getText()); }); }).catch(function(){ status.textContent="Scan caméra indisponible — tape le code à la main."; stopCam(); camBtn.textContent="📷 Scanner avec la caméra"; }); } }).catch(function(){ status.textContent="Autorise la caméra, ou tape le code à la main."; }); };
+}
+
+/* ===================== Tableau de bord ===================== */
+function sparkline(vals, color){
+  if(vals.length<2) return "";
+  var W=320,H=90,pad=8;
+  var min=Math.min.apply(null,vals), max=Math.max.apply(null,vals); if(max===min){ max=min+1; min=min-1; }
+  var pts=vals.map(function(v,i){ var x=pad+(W-2*pad)*i/(vals.length-1); var y=pad+(H-2*pad)*(1-(v-min)/(max-min)); return [x,y]; });
+  var line=pts.map(function(p,i){ return (i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1); }).join(" ");
+  var area="M"+pts[0][0].toFixed(1)+" "+(H-pad)+" "+pts.map(function(p){return "L"+p[0].toFixed(1)+" "+p[1].toFixed(1);}).join(" ")+" L"+pts[pts.length-1][0].toFixed(1)+" "+(H-pad)+" Z";
+  var dots=pts.map(function(p){return '<circle cx="'+p[0].toFixed(1)+'" cy="'+p[1].toFixed(1)+'" r="2.4" fill="'+color+'"/>';}).join("");
+  return '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block"><path d="'+area+'" fill="'+color+'" opacity="0.12"/><path d="'+line+'" fill="none" stroke="'+color+'" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>'+dots+'</svg>';
+}
+function barWeek(map, goal, color){
+  map=map||{}; var days=[]; var JL=["D","L","M","M","J","V","S"];
+  for(var i=6;i>=0;i--){ var d=new Date(); d.setDate(d.getDate()-i); var key=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); days.push({v:map[key]||0,lab:JL[d.getDay()]}); }
+  var max=Math.max(goal||0, Math.max.apply(null,days.map(function(x){return x.v;})), 1);
+  var W=320,H=104,pad=14,gap=(W-2*pad)/7,bw=gap*0.58,base=H-20,top=14;
+  var goalY=base-(base-top)*(goal/max);
+  var goalLine=goal? '<line x1="'+pad+'" y1="'+goalY.toFixed(1)+'" x2="'+(W-pad)+'" y2="'+goalY.toFixed(1)+'" stroke="#C9A84C" stroke-width="1" stroke-dasharray="3 3" opacity="0.55"/>':"";
+  var bars=days.map(function(x,i){ var h=(base-top)*(x.v/max); var bx=pad+gap*i+(gap-bw)/2; var by=base-h;
+    return '<rect x="'+bx.toFixed(1)+'" y="'+by.toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+Math.max(0,h).toFixed(1)+'" rx="3" fill="'+color+'"/>'
+      +'<text x="'+(bx+bw/2).toFixed(1)+'" y="'+(H-5)+'" text-anchor="middle" font-size="9" fill="#7FA88B">'+x.lab+'</text>'
+      +(x.v?'<text x="'+(bx+bw/2).toFixed(1)+'" y="'+(by-3).toFixed(1)+'" text-anchor="middle" font-size="9" fill="#F5F0E8">'+x.v+'</text>':''); }).join("");
+  return '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block">'+goalLine+bars+'</svg>';
+}
+function openDashboard(c, isSelf){
+  clear(); topbar("Tableau de bord", c.nom, function(){ openClient(c.id,isSelf); });
+  var jours=(c.joursReussis||[]).length, b=belt(jours), nb=nextBelt(jours);
+  var pr=el("div","card");
+  pr.innerHTML='<div class="row" style="justify-content:space-between"><div><div class="eyebrow">Progression</div><div style="font-size:22px;font-weight:800;margin-top:3px">'+jours+' jours</div></div><span class="belt"><span class="dot" style="background:'+b.c+'"></span>Ceinture '+b.n+'</span></div>'+(nb?'<div class="muted" style="font-size:12px;margin-top:9px">'+(nb.min-jours)+' jours avant la ceinture '+nb.n+'</div>':'');
+  app.appendChild(pr);
+  var mes=(c.mesures||[]).filter(function(m){return !m.del && m.poids!=null;}).sort(function(a,b){return (a.date||"").localeCompare(b.date||"");});
+  if(mes.length>=2){
+    var vals=mes.map(function(m){return m.poids;}); var first=vals[0], last=vals[vals.length-1], d=last-first;
+    var card=el("div","card");
+    card.innerHTML='<div class="row" style="justify-content:space-between;margin-bottom:10px"><div class="eyebrow">Poids</div><div style="font-weight:800;color:'+(d<=0?"var(--ok)":"var(--orange)")+'">'+last+' kg ('+(d>0?"+":"")+d.toFixed(1)+')</div></div>'+sparkline(vals,"#C9A84C");
+    app.appendChild(card);
+  }
+  var latest=(c.mesures||[]).filter(function(m){return !m.del;}).sort(function(a,b){return (b.date||"").localeCompare(a.date||"");})[0];
+  if(latest && (latest.graisse!=null||latest.muscle!=null||latest.eau!=null)){
+    var comp=el("div","card"); comp.appendChild(el("div","eyebrow","Composition (dernière mesure)")); var sp=el("div"); sp.style.height="8px"; comp.appendChild(sp);
+    [["Masse grasse","graisse","%"],["Masse musculaire","muscle","%"],["Eau","eau","%"],["IMC","imc",""]].forEach(function(f){ if(latest[f[1]]!=null){ var l=el("div","line"); l.innerHTML='<span class="k">'+f[0]+'</span><span class="v">'+latest[f[1]]+(f[2]?" "+f[2]:"")+'</span>'; comp.appendChild(l); } });
+    app.appendChild(comp);
+  }
+  var ec=el("div","card"); ec.appendChild(el("div","eyebrow","Compteur ergo · 7 jours")); var s1=el("div"); s1.style.height="6px"; ec.appendChild(s1);
+  ec.insertAdjacentHTML("beforeend", barWeek(c.ergo, 30, "#C9A84C")); app.appendChild(ec);
+  var hc=el("div","card"); hc.appendChild(el("div","eyebrow","Hydratation · 7 jours")); var s2=el("div"); s2.style.height="6px"; hc.appendChild(s2);
+  hc.insertAdjacentHTML("beforeend", barWeek(c.hydra, 8, "#6FCF97")); app.appendChild(hc);
+  var jr=(c.journal||[]).filter(function(e){return !e.del && e.date===today();}); var kc=0; jr.forEach(function(e){kc+=e.kcal||0;});
+  var target=(c.cibles&&c.cibles.basale)||null;
+  var nc=el("div","card"); nc.innerHTML='<div class="row" style="justify-content:space-between"><div class="eyebrow">Nutrition aujourd\'hui</div><div style="font-weight:800;color:var(--gold)">'+Math.round(kc)+(target?' / '+target:'')+' kcal</div></div>'; app.appendChild(nc);
 }
 
 /* ---------- démarrage ---------- */
