@@ -135,7 +135,7 @@ var syncT;
 function setSync(msg){ var e=document.getElementById("sync"); if(!e) return; e.textContent=msg; e.style.display="block";
   clearTimeout(syncT); syncT=setTimeout(function(){ e.style.display="none"; }, 2600); }
 
-var APP_VERSION = "build 8 · 30 juin";
+var APP_VERSION = "build 15 · 30 juin";
 
 /* ---------- localStorage ---------- */
 function readLS(k){ try{ return JSON.parse(localStorage.getItem(k)); }catch(e){ return null; } }
@@ -148,6 +148,9 @@ function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){retur
 function num(v){ var n=parseFloat(v); return isNaN(n)?null:n; }
 function fmtDate(iso){ if(!iso) return ""; var p=String(iso).slice(0,10).split("-"); return p.length===3 ? p[2]+"/"+p[1]+"/"+p[0] : iso; }
 function slugLogin(nom){ return nom.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z ]/g,"").trim().split(/\s+/).join("."); }
+
+function resizePhoto(file, cb){ var img=new Image(); img.onload=function(){ var max=240,w=img.naturalWidth,h=img.naturalHeight,s=Math.min(1,max/Math.max(w,h)); var cw=Math.round(w*s),ch=Math.round(h*s); var cv=document.createElement("canvas"); cv.width=cw; cv.height=ch; cv.getContext("2d").drawImage(img,0,0,cw,ch); try{ cb(cv.toDataURL("image/jpeg",0.72)); }catch(e){ cb(null); } }; img.onerror=function(){ cb(null); }; img.src=URL.createObjectURL(file); }
+function avatarEl(c, size){ size=size||44; var d=el("div"); d.style.cssText="width:"+size+"px;height:"+size+"px;border-radius:50%;flex-shrink:0;background:var(--surf);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--gold);font-size:"+Math.round(size*0.4)+"px;overflow:hidden"; if(c && c.photo){ d.style.backgroundImage="url("+c.photo+")"; d.style.backgroundSize="cover"; d.style.backgroundPosition="center"; } else { d.textContent=((c&&c.nom)||"?").trim().slice(0,1).toUpperCase(); } return d; }
 
 /* ---------- ceintures (progression) ---------- */
 var BELTS = [
@@ -207,10 +210,10 @@ function iconSvg(key){ return '<svg viewBox="0 0 24 24">'+(ICONS[key]||"")+'</sv
    COUCHE DONNÉES
 ============================================================================ */
 function emptyClient(nom){
-  return { id:genId(), nom:nom||"", login:slugLogin(nom||"cliente"), pin:"1234",
+  return { id:genId(), nom:nom||"", login:slugLogin(nom||"cliente"), pin:"1234", photo:null,
     profil:{ age:"", taille:"", sexe:"", niveau:"" },
     objectifText:"", dateDebut:today(),
-    joursReussis:[], objectifs:[], mesures:[], sante:[], journal:[], programme:[], seances:[], messages:[], ergo:{}, hydra:{}, cibles:{ basale:null },
+    joursReussis:[], objectifs:[], mesures:[], sante:[], journal:[], programme:[], seances:[], messages:[], audit:{}, ergo:{}, ergoSquat:{}, ergoFente:{}, ergoHinge:{}, ergoEtages:{}, hydra:{}, cibles:{ basale:null },
     _mtime:0 };
 }
 function maxMerge(a,b){ a=a||{}; b=b||{}; var o={}; Object.keys(a).forEach(function(k){o[k]=a[k];}); Object.keys(b).forEach(function(k){ o[k]=Math.max(o[k]||0,b[k]||0); }); return o; }
@@ -234,6 +237,10 @@ function mergeClient(a, b){
   m.seances = unionBy((a.seances||[]).concat(b.seances||[]), function(x){ return x.id; });
   m.messages = unionBy((a.messages||[]).concat(b.messages||[]), function(x){ return x.id; });
   m.ergo = maxMerge(a.ergo, b.ergo);
+  m.ergoSquat = maxMerge(a.ergoSquat, b.ergoSquat);
+  m.ergoFente = maxMerge(a.ergoFente, b.ergoFente);
+  m.ergoHinge = maxMerge(a.ergoHinge, b.ergoHinge);
+  m.ergoEtages = maxMerge(a.ergoEtages, b.ergoEtages);
   m.hydra = maxMerge(a.hydra, b.hydra);
   m._mtime = Math.max(a._mtime||0, b._mtime||0);
   return m;
@@ -380,13 +387,14 @@ function screenLogin(){
   pinIn.addEventListener("keydown",function(e){ if(e.key==="Enter") attempt(); });
 
   app.appendChild(phraseCard());
+  var disc=el("button","btn ghost block","Découvrir Ex Home"); disc.style.marginTop="12px"; disc.onclick=function(){ openPresentation(screenLogin); }; app.appendChild(disc);
   var vf=el("div","center muted"); vf.style.cssText="margin-top:18px;font-size:11px;letter-spacing:.05em"; vf.textContent="Ex Home v2 · "+APP_VERSION; app.appendChild(vf);
 }
 
 /* ---------- ROSTER (coach) ---------- */
 function screenRoster(){
   clear();
-  var t=topbar("Mes pratiquantes","Coach "+esc(session.coach));
+  var t=topbar("Mes pratiquant·es","Coach "+esc(session.coach));
   var out=el("button","back"); out.textContent="Quitter"; out.onclick=logout; t.appendChild(el("div","spacer")); t.appendChild(out);
 
   var loading=el("div","muted center","Chargement…"); loading.style.margin="30px 0"; app.appendChild(loading);
@@ -395,19 +403,19 @@ function screenRoster(){
     loading.remove();
     var list=el("div");
     (r.clients||[]).forEach(function(cl){
-      var card=el("div","card"); card.style.cursor="pointer"; card.style.display="flex"; card.style.alignItems="center"; card.style.gap="13px";
-      card.innerHTML='<div style="width:42px;height:42px;border-radius:12px;background:var(--surf);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--gold)">'+esc((cl.nom||"?").slice(0,1).toUpperCase())+'</div>';
+      var card=el("div","card"); card.style.cssText+=";cursor:pointer;display:flex;align-items:center;gap:13px";
+      var av=avatarEl(cl,44); card.appendChild(av);
       var info=el("div"); info.style.flex="1";
       info.innerHTML='<div style="font-weight:700">'+esc(cl.nom)+'</div><div class="muted" style="font-size:12px">Identifiant : '+esc(cl.login)+'</div>';
       card.appendChild(info);
       var beltSpan=el("span","pill","…"); card.appendChild(beltSpan);
       card.onclick=function(){ openClient(cl.id, false); };
       list.appendChild(card);
-      loadClient(cl.id).then(function(full){ if(full){ var b=belt((full.joursReussis||[]).length); beltSpan.textContent=b.n; beltSpan.style.color=b.c; } });
+      loadClient(cl.id).then(function(full){ if(full){ if(full.photo){ av.style.backgroundImage="url("+full.photo+")"; av.style.backgroundSize="cover"; av.style.backgroundPosition="center"; av.textContent=""; } var b=belt((full.joursReussis||[]).length); beltSpan.textContent=b.n; beltSpan.style.color=b.c; } });
     });
     app.appendChild(list);
 
-    var add=el("button","btn line block","+ Ajouter une pratiquante"); add.style.marginTop="6px";
+    var add=el("button","btn line block","+ Ajouter un·e pratiquant·e"); add.style.marginTop="6px";
     add.onclick=function(){ addClientForm(r); };
     app.appendChild(add);
     var vf=el("div","center muted"); vf.style.cssText="margin-top:22px;font-size:11px;letter-spacing:.05em"; vf.textContent="Ex Home v2 · "+APP_VERSION; app.appendChild(vf);
@@ -415,7 +423,7 @@ function screenRoster(){
 }
 function addClientForm(roster){
   clear();
-  topbar("Nouvelle pratiquante","Coach", screenRoster);
+  topbar("Nouveau profil pratiquant·e","Coach", screenRoster);
   var c=el("div","card");
   var nom=input("",{placeholder:"Prénom Nom"});
   var pin=input("1234",{placeholder:"Code à 4 chiffres", inputmode:"numeric"});
@@ -444,13 +452,14 @@ function openClient(id, isSelf){
     loading.remove();
     if(!c){ toast("Fiche introuvable"); render(); return; }
     var back = isSelf ? logout : screenRoster;
-    var t=topbar(c.nom || "Pratiquante", isSelf?"Mon espace":"Pratiquante", back);
+    var t=topbar(c.nom || "Pratiquant·e", isSelf?"Mon espace":"Pratiquant·e", back);
     if(isSelf){ var out=el("button","back"); out.textContent="Quitter"; out.onclick=logout; t.appendChild(el("div","spacer")); t.appendChild(out); }
 
     // bonjour + phrase du jour
-    var hello=el("div"); hello.style.cssText="font-size:15px;color:var(--dim);margin:2px 0 12px";
-    hello.textContent="Bonjour "+(((c.nom||"").trim().split(" ")[0])||"")+" 👋";
-    app.appendChild(hello);
+    var helloRow=el("div"); helloRow.style.cssText="display:flex;align-items:center;gap:11px;margin:2px 0 14px";
+    helloRow.appendChild(avatarEl(c,46));
+    var hello=el("div"); hello.style.cssText="font-size:16px;font-weight:600"; hello.innerHTML="Bonjour "+esc(((c.nom||"").trim().split(" ")[0])||"")+" 👋";
+    helloRow.appendChild(hello); app.appendChild(helloRow);
     app.appendChild(phraseCard());
     // bandeau progression
     var jours=(c.joursReussis||[]).length, b=belt(jours), nb=nextBelt(jours);
@@ -476,6 +485,7 @@ function openClient(id, isSelf){
       b.appendChild(plate); b.appendChild(lb); b.onclick=fn; grid.appendChild(b);
     }
     function soon(lbl){ return function(){ openSoon(lbl, function(){ openClient(c.id,isSelf); }); }; }
+    appIcon("compass","Ex Home", function(){ openPresentation(function(){ openClient(c.id,isSelf); }); });
     appIcon("calendar","Valider", function(){ screenProgression(c, isSelf); });
     appIcon("timer","Compteur ergo", function(){ screenCompteur(c, isSelf); });
     appIcon("drop","Hydratation", function(){ screenHydra(c, isSelf); });
@@ -490,6 +500,7 @@ function openClient(id, isSelf){
     appIcon("chat","Messages", function(){ openMessages(c, isSelf); });
     appIcon("posture","Coach posture", function(){ openPosture(c, isSelf); });
     appIcon("camera","Scan balance", function(){ openScan(c, isSelf); });
+    appIcon("search","Audit départ", function(){ openAudit(c, isSelf); });
     appIcon("user","Profil", function(){ screenProfil(c, isSelf); });
     app.appendChild(grid);
     var foot=el("div","center muted"); foot.style.cssText="margin-top:30px;font-size:11px;letter-spacing:.04em"; foot.textContent="Ex Home v2 · "+APP_VERSION; app.appendChild(foot);
@@ -545,7 +556,7 @@ function visibleMes(c){ return (c.mesures||[]).filter(function(m){ return !m.del
 function screenMesures(c, isSelf){
   clear();
   topbar("Mesures", c.nom, function(){ openClient(c.id, isSelf); });
-  app.appendChild(el("div","muted","Un seul endroit pour tes mesures. Tout est synchronisé entre la pratiquante et le coach."));
+  app.appendChild(el("div","muted","Un seul endroit pour tes mesures. Tout est synchronisé entre le·la pratiquant·e et le coach."));
   var addBtn=el("button","btn line block","+ Ajouter une mesure"); addBtn.style.margin="14px 0";
   addBtn.onclick=function(){ mesureForm(c, isSelf, null); };
   app.appendChild(addBtn);
@@ -653,6 +664,13 @@ function screenProfil(c, isSelf){
   var dateDeb=input((c.dateDebut||"").slice(0,10),{type:"date"});
   var objectif=input(c.objectifText,{placeholder:"Objectif principal"});
 
+  var avRow=el("div"); avRow.style.cssText="display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:16px";
+  var av=avatarEl(c,84);
+  var photoIn=document.createElement("input"); photoIn.type="file"; photoIn.accept="image/*"; photoIn.style.display="none";
+  var chg=el("button","btn ghost","Changer la photo"); chg.style.fontSize="13px";
+  chg.onclick=function(){ photoIn.click(); };
+  photoIn.onchange=function(){ var f=this.files[0]; if(!f) return; chg.textContent="Chargement…"; resizePhoto(f,function(data){ if(!data){ chg.textContent="Changer la photo"; toast("Photo illisible."); return; } c.photo=data; saveClient(c).then(function(m){ Object.assign(c,m); toast("Photo enregistrée"); screenProfil(c,isSelf); }); }); };
+  avRow.appendChild(av); avRow.appendChild(chg); avRow.appendChild(photoIn); card.appendChild(avRow);
   card.appendChild(field("Nom", nom));
   var two=el("div","two"); two.appendChild(field("Âge", age)); two.appendChild(field("Taille (cm)", taille)); card.appendChild(two);
   card.appendChild(field("Niveau", niveau));
@@ -663,7 +681,7 @@ function screenProfil(c, isSelf){
   // identifiants (coach seulement)
   if(!isSelf){
     var idc=el("div","card flat");
-    idc.appendChild(el("div","eyebrow","Accès de la pratiquante"));
+    idc.appendChild(el("div","eyebrow","Accès pratiquant·e"));
     var sp=el("div"); sp.style.height="10px"; idc.appendChild(sp);
     var login=input(c.login,{autocapitalize:"none"}); var pin=input(c.pin,{});
     idc.appendChild(field("Identifiant", login)); idc.appendChild(field("Code", pin));
@@ -698,34 +716,44 @@ function openSoon(label, back){
   app.appendChild(card);
 }
 
+var MOVE_SVG={ ergoSquat:'<svg viewBox="0 0 200 200" width="30" height="30"><g fill="none" stroke="url(#exhGold)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"><circle cx="88" cy="38" r="14"/><path d="M88 52 L80 98"/><path d="M86 66 L126 74"/><path d="M80 98 L122 104"/><path d="M122 104 L122 162"/><path d="M122 162 L146 162"/></g><g stroke="none"><circle cx="122" cy="104" r="5" fill="url(#exhOrange)"/><circle cx="80" cy="98" r="4" fill="url(#exhOrange)"/></g></svg>', ergoFente:'<svg viewBox="0 0 200 200" width="30" height="30"><g fill="none" stroke="url(#exhGold)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"><circle cx="92" cy="34" r="14"/><path d="M92 48 L92 98"/><path d="M92 60 L112 80"/><path d="M92 98 L124 120"/><path d="M124 120 L124 162"/><path d="M124 162 L146 162"/><path d="M92 98 L64 124"/><path d="M64 124 L48 162"/><path d="M48 162 L34 162"/></g><g stroke="none"><circle cx="124" cy="120" r="5" fill="url(#exhOrange)"/></g></svg>', ergoHinge:'<svg viewBox="0 0 200 200" width="30" height="30"><g fill="none" stroke="url(#exhGold)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"><circle cx="42" cy="74" r="14"/><path d="M56 80 L48 78"/><path d="M108 96 L56 80"/><path d="M108 96 L112 130"/><path d="M112 130 L116 162"/><path d="M116 162 L138 162"/><path d="M56 80 L52 116"/></g><g stroke="none"><circle cx="108" cy="96" r="5" fill="url(#exhOrange)"/><circle cx="112" cy="130" r="5" fill="url(#exhOrange)"/></g></svg>' };
+function ergoDay(c, key){ return (((c.ergoSquat||{})[key])||0)+(((c.ergoFente||{})[key])||0)+(((c.ergoHinge||{})[key])||0); }
+function ergoTotalMap(c){ var m={}; ["ergoSquat","ergoFente","ergoHinge"].forEach(function(k){ var o=c[k]||{}; Object.keys(o).forEach(function(d){ m[d]=(m[d]||0)+(o[d]||0); }); }); return m; }
 function screenCompteur(c, isSelf){
   clear(); topbar("Compteur ergo", c.nom, function(){ openClient(c.id,isSelf); });
-  c.ergo=c.ergo||{}; var GOAL=30;
-  function cnt(){ return c.ergo[today()]||0; }
+  c.ergoSquat=c.ergoSquat||{}; c.ergoFente=c.ergoFente||{}; c.ergoHinge=c.ergoHinge||{};
+  var GOAL=30;
+  var TYPES=[{k:"ergoSquat",lab:"Squat",emoji:"🦵",col:"#C9A84C",desc:"Genoux fléchis, dos droit, poussée par les talons"},{k:"ergoFente",lab:"Fente",emoji:"🏃",col:"#7EC8A0",desc:"Un genou en avant, l'autre vers le sol"},{k:"ergoHinge",lab:"Hinge",emoji:"🔄",col:"#6FCF97",desc:"Charnière de hanche, dos neutre, ischios actifs"},{k:"ergoEtages",lab:"Étages",emoji:"🪜",col:"#5A9BD4",desc:"Montées d'escaliers (bonus, hors objectif ramassages)"}];
   var wrap=el("div");
   function paint(){
     wrap.innerHTML="";
-    var n=cnt(), mins=Math.round(n*8/60);
+    var n=ergoDay(c,today()), mins=Math.round(n*8/60);
     var head=el("div","card center");
-    head.innerHTML='<div class="eyebrow">Aujourd\'hui</div>'
-      +'<div style="font-size:46px;font-weight:800;margin:8px 0 2px;color:var(--gold)">'+n+'</div>'
-      +'<div class="muted">ramassages · objectif '+GOAL+'</div>';
-    var bw=el("div"); bw.style.cssText="height:9px;border-radius:9px;background:var(--surf);margin:14px 0 6px;overflow:hidden";
-    var fl=el("div"); fl.style.cssText="height:100%;width:"+Math.min(100,n/GOAL*100)+"%;background:linear-gradient(90deg,var(--gold),var(--ok))"; bw.appendChild(fl); head.appendChild(bw);
+    head.innerHTML='<div class="eyebrow">Aujourd\'hui</div><div style="font-size:46px;font-weight:800;margin:8px 0 2px;color:var(--gold)">'+n+'</div><div class="muted">ramassages au total · objectif '+GOAL+'</div>';
+    var bw=el("div"); bw.style.cssText="height:9px;border-radius:9px;background:var(--surf);margin:14px 0 6px;overflow:hidden"; var fl=el("div"); fl.style.cssText="height:100%;width:"+Math.min(100,n/GOAL*100)+"%;background:linear-gradient(90deg,var(--gold),var(--ok))"; bw.appendChild(fl); head.appendChild(bw);
     var msg=el("div","muted"); msg.style.cssText="font-size:13px;margin-top:8px";
     if(n===0) msg.textContent="💧 Pas encore de ramassage aujourd'hui — c'est parti !";
-    else if(n<GOAL) msg.textContent="💪 Encore "+(GOAL-n)+" ramassages pour atteindre l'objectif du jour !";
+    else if(n<GOAL) msg.textContent="💪 Encore "+(GOAL-n)+" ramassages pour atteindre l'objectif !";
     else msg.textContent="✓ Objectif atteint ! "+n+" ramassages ≈ "+mins+" min de mouvement.";
     head.appendChild(msg); wrap.appendChild(head);
-    var btns=el("div","wrap"); btns.style.marginBottom="14px";
-    [1,5].forEach(function(p){ var b=el("button","btn primary","+ "+p); b.style.flex="1"; b.onclick=function(){ c.ergo[today()]=cnt()+p; saveClient(c).then(function(m){ Object.assign(c,m); paint(); }); }; btns.appendChild(b); });
-    var minus=el("button","btn ghost","− 1"); minus.onclick=function(){ if(cnt()>0){ c.ergo[today()]=cnt()-1; saveClient(c).then(function(m){ Object.assign(c,m); paint(); }); } }; btns.appendChild(minus);
-    wrap.appendChild(btns);
-    var week=el("div","card"); week.appendChild(el("div","eyebrow","Cette semaine"));
-    var sp=el("div"); sp.style.height="8px"; week.appendChild(sp); var total=0;
-    for(var i=6;i>=0;i--){ var d=new Date(); d.setDate(d.getDate()-i); var key=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); var v=c.ergo[key]||0; total+=v; var l=el("div","line"); l.innerHTML='<span class="k">'+fmtDate(key)+'</span><span class="v">'+v+'</span>'; week.appendChild(l); }
-    var tot=el("div","line"); tot.innerHTML='<span class="k" style="color:var(--gold)">Total semaine</span><span class="v" style="color:var(--gold)">'+total+'</span>'; week.appendChild(tot);
-    wrap.appendChild(week);
+    TYPES.forEach(function(t){
+      var v=c[t.k][today()]||0;
+      var row=el("div","card");
+      row.style.borderLeft="3px solid "+t.col;
+      row.innerHTML='<div class="row" style="justify-content:space-between;align-items:center">'
+        +'<div style="display:flex;align-items:center;gap:12px">'
+          +'<span style="width:48px;height:48px;border-radius:14px;background:linear-gradient(150deg,#10301F,#0A1A12);border:1px solid '+t.col+';display:flex;align-items:center;justify-content:center;font-size:25px;flex-shrink:0">'+t.emoji+'</span>'
+          +'<div><div style="font-weight:700;font-size:15px">'+t.lab+'</div><div class="muted" style="font-size:11px;line-height:1.35;margin-top:2px">'+t.desc+'</div></div>'
+        +'</div>'
+        +'<div style="font-size:24px;font-weight:800;color:'+t.col+'">'+v+'</div></div>';
+      var btns=el("div","row"); btns.style.marginTop="10px";
+      var plus=el("button","btn primary","+1 "+t.lab); plus.style.flex="1"; plus.onclick=function(){ c[t.k][today()]=(c[t.k][today()]||0)+1; saveClient(c).then(function(m){Object.assign(c,m); paint();}); };
+      var minus=el("button","btn ghost","−1"); minus.onclick=function(){ if((c[t.k][today()]||0)>0){ c[t.k][today()]=(c[t.k][today()]||0)-1; saveClient(c).then(function(m){Object.assign(c,m); paint();}); } };
+      btns.appendChild(plus); btns.appendChild(minus); row.appendChild(btns); wrap.appendChild(row);
+    });
+    var week=el("div","card"); week.appendChild(el("div","eyebrow","Cette semaine (total)")); var sp=el("div"); sp.style.height="8px"; week.appendChild(sp); var total=0;
+    for(var i=6;i>=0;i--){ var d=new Date(); d.setDate(d.getDate()-i); var key=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); var val=ergoDay(c,key); total+=val; var l=el("div","line"); l.innerHTML='<span class="k">'+fmtDate(key)+'</span><span class="v">'+val+'</span>'; week.appendChild(l); }
+    var tot=el("div","line"); tot.innerHTML='<span class="k" style="color:var(--gold)">Total semaine</span><span class="v" style="color:var(--gold)">'+total+'</span>'; week.appendChild(tot); wrap.appendChild(week);
   }
   paint(); app.appendChild(wrap);
 }
@@ -1413,7 +1441,7 @@ function openDashboard(c, isSelf){
     app.appendChild(comp);
   }
   var ec=el("div","card"); ec.appendChild(el("div","eyebrow","Compteur ergo · 7 jours")); var s1=el("div"); s1.style.height="6px"; ec.appendChild(s1);
-  ec.insertAdjacentHTML("beforeend", barWeek(c.ergo, 30, "#C9A84C")); app.appendChild(ec);
+  ec.insertAdjacentHTML("beforeend", barWeek(ergoTotalMap(c), 30, "#C9A84C")); app.appendChild(ec);
   var hc=el("div","card"); hc.appendChild(el("div","eyebrow","Hydratation · 7 jours")); var s2=el("div"); s2.style.height="6px"; hc.appendChild(s2);
   hc.insertAdjacentHTML("beforeend", barWeek(c.hydra, 8, "#6FCF97")); app.appendChild(hc);
   var jr=(c.journal||[]).filter(function(e){return !e.del && e.date===today();}); var kc=0; jr.forEach(function(e){kc+=e.kcal||0;});
@@ -1590,6 +1618,95 @@ function openScan(c, isSelf){
   card.appendChild(grid); app.appendChild(card);
   var save=el("button","btn primary block","Enregistrer dans mes mesures"); app.appendChild(save);
   save.onclick=function(){ var any=false; var m={id:genId(),date:dateIn.value||today(),source:"balance",_ts:Date.now()}; SCALE_FIELDS.forEach(function(f){ var v=num(inputs[f.k].value); if(v!=null){m[f.k]=v; any=true;} }); if(!any){toast("Renseigne au moins une valeur.");return;} c.mesures=(c.mesures||[]).concat([m]); save.disabled=true; save.textContent="Enregistrement…"; saveClient(c).then(function(mc){Object.assign(c,mc); toast("Mesure enregistrée"); openClient(c.id,isSelf);}); };
+}
+
+/* ===================== Audit de départ (découverte) ===================== */
+function openAudit(c, isSelf){
+  clear(); topbar("Audit de départ", c.nom, function(){ openClient(c.id,isSelf); });
+  var coach=isCoach(); c.audit=c.audit||{};
+  app.appendChild(el("div","muted", coach? "Bilan initial de découverte — ergoptimisation & nutrition." : "Ton bilan de départ, défini avec ton coach."));
+  var fields={};
+  function sec(title){ var card=el("div","card"); card.appendChild(el("div","eyebrow",title)); var sp=el("div"); sp.style.height="10px"; card.appendChild(sp); app.appendChild(card); return card; }
+  function add(card,key,label,ph,multi){ var i= multi? textarea(c.audit[key],ph) : input(c.audit[key],{placeholder:ph||""}); if(!coach){ i.disabled=true; i.style.opacity=".85"; } fields[key]=i; card.appendChild(field(label,i)); }
+  var s1=sec("1 · Identité & contexte");
+  add(s1,"profession","Profession / activité","Ex : Infirmière, Commerciale…");
+  add(s1,"situationPro","Situation professionnelle","Active / sans activité…");
+  add(s1,"contexte","Contexte de vie","Seul·e, en couple, enfants…");
+  add(s1,"aide","Aide à domicile","Femme de ménage, aide…");
+  var s2=sec("2 · Objectifs & motivations");
+  add(s2,"ameliorer","Ce que la personne souhaite améliorer",null,true);
+  add(s2,"ressenti","Ressenti souhaité","");
+  add(s2,"premierResultat","Premier résultat attendu","");
+  add(s2,"echeance","Échéance / événement","Ex : mariage en juin…");
+  add(s2,"freins","Freins / obstacles","Ex : manque de temps…",true);
+  var s3=sec("3 · Antécédents & pathologies");
+  add(s3,"antecedents","Suivi médical","Médicaments, kiné, ostéo…",true);
+  add(s3,"limitations","Limitations / précautions","Ex : Lombaires fragiles, éviter flexions…",true);
+  var s4=sec("4 · Sédentarité & activité physique");
+  add(s4,"sedentarite","Niveau de sédentarité / activité","");
+  add(s4,"activiteObs","Observations",null,true);
+  var s5=sec("5 · Habitudes & tâches ménagères");
+  add(s5,"taches","Tâches du quotidien","Repassage, préparation des repas, courses, ménage…",true);
+  add(s5,"obsModeVie","Observations sur le mode de vie",null,true);
+  var s7=sec("6 · Bilan postural & ergoptimiste");
+  add(s7,"obsPosture","Observations posturales",null,true);
+  add(s7,"tensions","Zones de tension, compensations, asymétries",null,true);
+  add(s7,"priorites","Priorités pour la personne",null,true);
+  add(s7,"recommandations","Recommandations",null,true);
+  var sn=sec("7 · Bilan nutritionnel");
+  add(sn,"nutHabitudes","Habitudes alimentaires","Repas, horaires, équilibre…",true);
+  add(sn,"nutGrignotage","Grignotage / sucre","Ex : pas de sucre dans le café…");
+  add(sn,"nutHydratation","Hydratation","");
+  add(sn,"nutObjectifs","Objectifs nutritionnels",null,true);
+  if(coach){ var save=el("button","btn primary block","Enregistrer l'audit"); app.appendChild(save); save.onclick=function(){ Object.keys(fields).forEach(function(k){ c.audit[k]=fields[k].value; }); c.audit._ts=Date.now(); save.disabled=true; save.textContent="Enregistrement…"; saveClient(c).then(function(m){Object.assign(c,m); toast("Audit enregistré"); openClient(c.id,isSelf);}); }; }
+}
+
+/* ===================== Présentation Ex Home ===================== */
+var DEFAULT_ABOUT={
+  intro:"Ex Home accompagne chacun·e vers plus de mouvement au quotidien, sans bouleverser son emploi du temps. L'idée : faire du quotidien un véritable terrain d'entraînement, accessible à tous les âges et à tous les niveaux.",
+  methode:"L'ergoptimisation consiste à transformer les gestes du quotidien — ménage, repassage, cuisine, escaliers, courses — en occasions de bouger, de se renforcer et de soigner sa posture. Pas besoin d'ajouter une heure de sport : on réoptimise ce qu'on fait déjà, un peu chaque jour. La constance modérée construit, là où le surentraînement freine.",
+  aude:"Aude — co-fondatrice. De formation juridique, elle pilote la stratégie, le développement et la communication d'Ex Home, et accompagne les pratiquant·es au quotidien.",
+  sylvain:"Sylvain — co-fondateur et coach sportif. Il conçoit la méthode d'entraînement, les exercices d'ergoptimisation et le suivi personnalisé des pratiquant·es."
+};
+var SCIENCE=[
+  "L'OMS recommande au moins 150 minutes d'activité physique modérée par semaine pour protéger durablement la santé.",
+  "Bouger régulièrement est associé à une nette réduction du risque de mortalité toutes causes — la constance compte plus que l'intensité.",
+  "Le NEAT (dépense énergétique liée aux activités quotidiennes, hors sport) peut représenter une part importante des calories brûlées chaque jour.",
+  "Fractionner le mouvement en petites doses tout au long de la journée apporte des bénéfices réels sur la santé cardiovasculaire et métabolique.",
+  "Dès quelques milliers de pas par jour, le risque de mortalité commence à diminuer significativement.",
+  "L'activité régulière aide aussi à réguler l'appétit, le sommeil et la gestion du stress."
+];
+var __about=null;
+function loadAbout(){ if(__about) return Promise.resolve(__about); var local=readLS("v2_about"); return cloudGet("v2:__about").then(function(cloud){ __about=Object.assign({},DEFAULT_ABOUT,local||{},cloud||{}); writeLS("v2_about",__about); return __about; }).catch(function(){ __about=Object.assign({},DEFAULT_ABOUT,local||{}); return __about; }); }
+function saveAbout(a){ __about=a; writeLS("v2_about",a); return cloudPut("v2:__about",a); }
+function openPresentation(backFn){
+  clear(); topbar("Ex Home","La méthode", backFn);
+  var wrap=el("div"); app.appendChild(wrap); wrap.appendChild(el("div","muted center","Chargement…"));
+  loadAbout().then(function(a){
+    wrap.innerHTML="";
+    var hd=el("div","center"); hd.style.margin="6px 0 16px";
+    hd.innerHTML='<div style="font-size:30px;font-weight:800;letter-spacing:.16em;color:var(--gold)">EX&nbsp;HOME</div><div class="muted" style="margin-top:6px;font-size:12px;letter-spacing:.18em;text-transform:uppercase">Ergo · Optimisation · Mouvement</div>';
+    wrap.appendChild(hd);
+    function block(title,text){ if(!text) return; var c=el("div","card"); c.appendChild(el("div","eyebrow",title)); var sp=el("div"); sp.style.height="8px"; c.appendChild(sp); var p=el("div"); p.style.cssText="font-size:14px;line-height:1.6;white-space:pre-wrap"; p.textContent=text; c.appendChild(p); wrap.appendChild(c); }
+    block("Notre vision", a.intro);
+    block("La méthode — l'ergoptimisation", a.methode);
+    var f=el("div","card"); f.appendChild(el("div","eyebrow","Les fondateurs")); var sp=el("div"); sp.style.height="10px"; f.appendChild(sp);
+    [a.aude,a.sylvain].forEach(function(t){ if(!t) return; var p=el("div"); p.style.cssText="font-size:14px;line-height:1.6;white-space:pre-wrap;margin-bottom:10px"; p.textContent=t; f.appendChild(p); });
+    wrap.appendChild(f);
+    var sc=el("div","card"); sc.appendChild(el("div","eyebrow","Ce que dit la science")); var sp2=el("div"); sp2.style.height="8px"; sc.appendChild(sp2);
+    SCIENCE.forEach(function(s){ var l=el("div"); l.style.cssText="display:flex;gap:9px;font-size:13.5px;line-height:1.5;margin-bottom:9px"; l.innerHTML='<span style="color:var(--gold);flex-shrink:0">◆</span><span>'+esc(s)+'</span>'; sc.appendChild(l); });
+    wrap.appendChild(sc);
+    if(isCoach()){ var edit=el("button","btn line block","Modifier la présentation"); edit.onclick=function(){ aboutForm(backFn,a); }; wrap.appendChild(edit); }
+  });
+}
+function aboutForm(backFn,a){
+  clear(); topbar("Modifier la présentation","Ex Home", function(){ openPresentation(backFn); });
+  var card=el("div","card");
+  var intro=textarea(a.intro,""), methode=textarea(a.methode,""), aude=textarea(a.aude,""), sylvain=textarea(a.sylvain,"");
+  [["Notre vision",intro],["La méthode",methode],["Présentation — Aude",aude],["Présentation — Sylvain",sylvain]].forEach(function(p){ card.appendChild(field(p[0],p[1])); });
+  app.appendChild(card);
+  var save=el("button","btn primary block","Enregistrer"); app.appendChild(save);
+  save.onclick=function(){ var n=Object.assign({},a,{intro:intro.value,methode:methode.value,aude:aude.value,sylvain:sylvain.value}); save.disabled=true; save.textContent="Enregistrement…"; saveAbout(n).then(function(){ toast("Présentation enregistrée"); openPresentation(backFn); }); };
 }
 
 /* ---------- démarrage ---------- */
