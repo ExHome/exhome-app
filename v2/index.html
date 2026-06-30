@@ -135,7 +135,7 @@ var syncT;
 function setSync(msg){ var e=document.getElementById("sync"); if(!e) return; e.textContent=msg; e.style.display="block";
   clearTimeout(syncT); syncT=setTimeout(function(){ e.style.display="none"; }, 2600); }
 
-var APP_VERSION = "build 20 · 30 juin";
+var APP_VERSION = "build 22 · 30 juin";
 
 /* ---------- localStorage ---------- */
 function readLS(k){ try{ return JSON.parse(localStorage.getItem(k)); }catch(e){ return null; } }
@@ -471,6 +471,7 @@ function openClient(id, isSelf){
       +'<span class="belt"><span class="dot" style="background:'+b.c+'"></span>Ceinture '+b.n+'</span></div>'
       +(nb?'<div class="muted" style="font-size:12px;margin-top:9px">Prochaine : '+nb.n+' à '+nb.min+' jours ('+(nb.min-jours)+' restants)</div>':'<div class="muted" style="font-size:12px;margin-top:9px">Ceinture maximale atteinte 🎉</div>');
     app.appendChild(head);
+    app.appendChild(scienceCard(function(){ openPresentation(function(){ openClient(c.id,isSelf); }); }));
 
     // accueil — tuiles premium identiques au launcher
     var mob = window.innerWidth < 560;
@@ -511,6 +512,14 @@ function openClient(id, isSelf){
 }
 
 /* ---------- PROGRESSION ---------- */
+var VALIDATIONS=[
+ "+1 jour ancré 🌿 Ta santé te remercie.",
+ "Un geste de plus vers l'automatisme : la régularité fait le reste.",
+ "Chaque jour validé renforce l'habitude autant que le muscle.",
+ "Un jour de plus sur le chemin des 66 — tu construis du durable.",
+ "Bravo 💪 La constance, c'est ce que la science récompense le plus.",
+ "Encore un jour gagné pour ton corps et ton cerveau 🧠"
+];
 function screenProgression(c, isSelf){
   clear();
   topbar("Progression", c.nom, function(){ openClient(c.id, isSelf); });
@@ -520,15 +529,17 @@ function screenProgression(c, isSelf){
     +'<div style="font-size:34px;font-weight:800;margin:14px 0 2px">'+jours+'</div><div class="muted">jours validés</div>'
     +(nb?'<div class="muted" style="font-size:12px;margin-top:10px">'+(nb.min-jours)+' jours avant la ceinture '+nb.n+'</div>':'');
   app.appendChild(head);
+  var sciLine=el("div","muted center"); sciLine.style.cssText="font-size:12px;line-height:1.5;margin:-4px 0 6px"; sciLine.textContent="La régularité, validée par la science (≈ 66 jours pour ancrer une habitude), améliore ta santé jour après jour."; app.appendChild(sciLine);
 
   var done = (c.joursReussis||[]).indexOf(today())>-1;
   var btn=el("button","btn block "+(done?"ghost":"primary"), done?"✓ Journée déjà validée":"Valider aujourd'hui");
   btn.disabled=done;
   btn.onclick=function(){
     if(c.joursReussis.indexOf(today())>-1) return;
+    var before=(c.joursReussis||[]).length;
     c.joursReussis=(c.joursReussis||[]).concat([today()]).sort();
     btn.disabled=true; btn.textContent="Enregistrement…";
-    saveClient(c).then(function(m){ Object.assign(c,m); toast("Journée validée 💪"); screenProgression(c,isSelf); });
+    saveClient(c).then(function(m){ Object.assign(c,m); var jrs=(c.joursReussis||[]).length, bNow=belt(jrs), bPrev=belt(before); if(bNow.n!==bPrev.n){ toast("🎉 Nouvelle ceinture : "+bNow.n+" !"); } else { toast(VALIDATIONS[jrs % VALIDATIONS.length]); } screenProgression(c,isSelf); });
   };
   app.appendChild(btn);
 
@@ -1808,6 +1819,16 @@ function startBreathing(ex, backFn){
     setTimeout(function(){ if(!running.on) return; pi++; if(pi>=ex.phases.length){ pi=0; cycle++; if(cycle>=ex.cycles){ running.on=false; phaseEl.textContent="Bravo 🌿"; countEl.textContent=""; circle.style.transitionDuration="1.2s"; circle.style.transform="scale(0.7)"; cycleEl.textContent="Séance terminée"; return; } } runPhase(); }, ph.dur*1000);
   }
   runPhase();
+}
+
+function scienceCard(onMore){
+  var c=el("div","card");
+  c.innerHTML='<div style="display:flex;gap:11px;align-items:flex-start">'
+    +'<span style="font-size:20px;flex-shrink:0;margin-top:1px">🔬</span>'
+    +'<div><div style="font-weight:700;font-size:14px;margin-bottom:5px;color:var(--gold)">Une méthode fondée sur la science</div>'
+    +'<div style="font-size:13px;line-height:1.55">En suivant le protocole avec régularité — squat, fente, hinge, mouvement au quotidien — tu agis concrètement sur ta santé. C\'est ce que montrent les recherches sur le NEAT (Levine), l\'activité régulière (OMS) et la formation des habitudes sur environ 66 jours (Lally, UCL). La constance transforme durablement ton bien-être.</div></div></div>';
+  var b=el("button","btn line block","Découvrir les fondements scientifiques"); b.style.marginTop="12px"; b.onclick=onMore; c.appendChild(b);
+  return c;
 }
 
 /* ---------- démarrage ---------- */
