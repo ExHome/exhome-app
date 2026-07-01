@@ -91,6 +91,31 @@
     background:var(--surf);border:1px solid var(--border);border-radius:999px;padding:4px 10px;z-index:50}
   @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
   ::placeholder{color:#557}
+  /* ---------- écran d'accueil / onboarding ---------- */
+  #exhOnb{min-height:calc(100dvh - 132px);display:flex;flex-direction:column}
+  #exhOnb .onb-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+  #exhOnb .onb-brand{display:flex;align-items:center;gap:9px;font-weight:800;font-size:17px;letter-spacing:.05em;color:var(--gold)}
+  #exhOnb .onb-brand svg path{stroke:var(--gold);stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round}
+  #exhOnb .onb-skip{background:none;border:none;color:var(--dim);font-size:14px;cursor:pointer;padding:6px}
+  #exhOnb .onb-vp{flex:1;overflow:hidden;position:relative}
+  #exhOnb .onb-track{display:flex;height:100%;transition:transform .42s cubic-bezier(.4,0,.2,1)}
+  #exhOnb .onb-slide{min-width:100%;display:flex;flex-direction:column;justify-content:center;padding:6px 0}
+  #exhOnb .onb-h1{font-size:29px;line-height:1.16;font-weight:800;letter-spacing:-.01em}
+  #exhOnb .onb-h1 em{font-style:normal;color:var(--gold)}
+  #exhOnb .onb-lead{margin-top:15px;font-size:16px;line-height:1.5;color:#E7EDE6}
+  #exhOnb .onb-steps{margin-top:20px;display:flex;flex-direction:column;gap:13px}
+  #exhOnb .onb-step{display:flex;gap:13px;align-items:flex-start}
+  #exhOnb .onb-n{flex:none;width:33px;height:33px;border-radius:50%;background:rgba(201,168,76,.14);border:1.5px solid var(--gold);color:var(--gold);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px}
+  #exhOnb .onb-step b{display:block;font-size:15.5px}
+  #exhOnb .onb-step span{font-size:13.5px;color:var(--dim)}
+  #exhOnb .onb-ex .tag{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--gold);font-weight:800}
+  #exhOnb .onb-ex p{margin:8px 0 0;font-size:15.5px;line-height:1.5;color:var(--text)}
+  #exhOnb .onb-forwho{font-size:16px;line-height:1.5;color:#E7EDE6}
+  #exhOnb .onb-forwho b{color:var(--text)}
+  #exhOnb .onb-dots{display:flex;gap:7px;justify-content:center;margin:16px 0}
+  #exhOnb .onb-d{width:7px;height:7px;border-radius:50%;background:rgba(245,240,232,.25);transition:all .3s}
+  #exhOnb .onb-d.on{width:22px;border-radius:4px;background:var(--gold)}
+  #exhOnb .onb-have{display:block;width:100%;text-align:center;margin-top:12px;background:none;border:none;color:var(--dim);font-size:14px;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
 </style>
 </head>
 <body>
@@ -135,7 +160,7 @@ var syncT;
 function setSync(msg){ var e=document.getElementById("sync"); if(!e) return; e.textContent=msg; e.style.display="block";
   clearTimeout(syncT); syncT=setTimeout(function(){ e.style.display="none"; }, 2600); }
 
-var APP_VERSION = "build 42 · 30 juin";
+var APP_VERSION = "build 43 · 1 juil. — écran d'accueil";
 
 /* ---------- localStorage ---------- */
 function readLS(k){ try{ return JSON.parse(localStorage.getItem(k)); }catch(e){ return null; } }
@@ -380,8 +405,65 @@ function input(value, attrs){ var i=el("input","inp"); i.value=value==null?"":va
 /* ============================================================================
    ÉCRANS
 ============================================================================ */
+/* ---------- ONBOARDING (écran d'accueil public, première visite) ---------- */
+function onboardingSeen(){ return readLS("exhome_v2_onboarded")===true; }
+function screenOnboarding(){
+  var i=0, N=3;
+  var wrap=el("div"); wrap.id="exhOnb";
+
+  var top=el("div","onb-top");
+  top.innerHTML='<div class="onb-brand"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 11 L12 4 L20 11 M6 10 V20 H18 V10"/></svg>EX HOME</div>';
+  var skip=el("button","onb-skip","Passer"); skip.onclick=finish; top.appendChild(skip);
+  wrap.appendChild(top);
+
+  var vp=el("div","onb-vp"); var track=el("div","onb-track");
+
+  var s1=el("div","onb-slide");
+  s1.innerHTML='<h1 class="onb-h1">Transforme les gestes de ton quotidien en <em>vraie forme physique</em>.</h1>'
+    +'<p class="onb-lead">Sans y consacrer une heure. Sans matériel. Chez toi.</p>';
+
+  var s2=el("div","onb-slide");
+  s2.innerHTML='<div class="eyebrow">L\'ergoptimisation</div>'
+    +'<p class="onb-lead" style="margin-top:12px">Porter, ranger, te baisser, monter les escaliers\u2026 des gestes que tu fais d\u00e9j\u00e0, transform\u00e9s en exercices qui comptent vraiment.</p>'
+    +'<div class="onb-steps">'
+    +'<div class="onb-step"><div class="onb-n">1</div><div><b>Je fais le point</b><span>Tu notes ton point de d\u00e9part.</span></div></div>'
+    +'<div class="onb-step"><div class="onb-n">2</div><div><b>Je bouge au quotidien</b><span>Des protocoles simples, chez toi.</span></div></div>'
+    +'<div class="onb-step"><div class="onb-n">3</div><div><b>Je progresse</b><span>Tu montes les niveaux, semaine apr\u00e8s semaine.</span></div></div>'
+    +'</div>';
+
+  var s3=el("div","onb-slide");
+  s3.innerHTML='<div class="card onb-ex"><div class="tag">Un exemple concret</div><p>Porter tes courses, <b style="color:var(--gold)">dos droit et jambes engag\u00e9es</b>, c\'est d\u00e9j\u00e0 un exercice de gainage. On t\'apprend juste \u00e0 bien le faire.</p></div>'
+    +'<p class="onb-forwho"><b>Pour toutes celles et ceux</b> qui n\'ont pas le temps de faire du sport \u2014 mais qui bougent d\u00e9j\u00e0, chaque jour.</p>';
+
+  track.appendChild(s1); track.appendChild(s2); track.appendChild(s3);
+  vp.appendChild(track); wrap.appendChild(vp);
+
+  var dots=el("div","onb-dots"); var dEls=[];
+  for(var k=0;k<N;k++){ var d=el("span","onb-d"+(k===0?" on":"")); dots.appendChild(d); dEls.push(d); }
+  wrap.appendChild(dots);
+  var cta=el("button","btn primary block","Suivant"); wrap.appendChild(cta);
+  var have=el("button","onb-have","J'ai d\u00e9j\u00e0 un compte"); have.onclick=finish; wrap.appendChild(have);
+
+  function paint(){
+    track.style.transform="translateX("+(-i*100)+"%)";
+    for(var k=0;k<N;k++){ dEls[k].className="onb-d"+(k===i?" on":""); }
+    cta.textContent = (i===N-1) ? "Commencer \u2014 c'est gratuit" : "Suivant";
+  }
+  cta.onclick=function(){ if(i<N-1){ i++; paint(); } else { finish(); } };
+
+  var x0=null;
+  vp.addEventListener("touchstart",function(e){ x0=e.touches[0].clientX; },{passive:true});
+  vp.addEventListener("touchend",function(e){ if(x0==null) return; var dx=e.changedTouches[0].clientX-x0;
+    if(dx<-45 && i<N-1){ i++; paint(); } else if(dx>45 && i>0){ i--; paint(); } x0=null; },{passive:true});
+
+  function finish(){ writeLS("exhome_v2_onboarded", true); render(); }
+
+  app.appendChild(wrap);
+}
+
 function render(){
   clear();
+  if(!session && !onboardingSeen()){ screenOnboarding(); return; }
   if(!session){ screenLogin(); return; }
   if(session.role==="coach"){ screenRoster(); return; }
   if(session.role==="client"){ openClient(session.clientId, true); return; }
