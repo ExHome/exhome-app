@@ -116,6 +116,9 @@
   #exhOnb .onb-d{width:7px;height:7px;border-radius:50%;background:rgba(245,240,232,.25);transition:all .3s}
   #exhOnb .onb-d.on{width:22px;border-radius:4px;background:var(--gold)}
   #exhOnb .onb-have{display:block;width:100%;text-align:center;margin-top:12px;background:none;border:none;color:var(--dim);font-size:14px;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+  #exhOnb .onb-illus{display:flex;justify-content:center;margin:0 0 6px}
+  #exhOnb .onb-illus svg{width:100%;max-width:270px;height:auto}
+  #exhOnb .onb-cap{text-align:center;font-size:14px;line-height:1.5;color:#E7EDE6;margin:0 0 16px}
 </style>
 </head>
 <body>
@@ -160,7 +163,7 @@ var syncT;
 function setSync(msg){ var e=document.getElementById("sync"); if(!e) return; e.textContent=msg; e.style.display="block";
   clearTimeout(syncT); syncT=setTimeout(function(){ e.style.display="none"; }, 2600); }
 
-var APP_VERSION = "build 43 · 1 juil. — écran d'accueil";
+var APP_VERSION = "build 46 · 1 juil. — encart ergoptimisation";
 
 /* ---------- localStorage ---------- */
 function readLS(k){ try{ return JSON.parse(localStorage.getItem(k)); }catch(e){ return null; } }
@@ -406,6 +409,7 @@ function input(value, attrs){ var i=el("input","inp"); i.value=value==null?"":va
    ÉCRANS
 ============================================================================ */
 /* ---------- ONBOARDING (écran d'accueil public, première visite) ---------- */
+var EXH_ILLUS='<svg viewBox="0 0 260 210" xmlns="http://www.w3.org/2000/svg" fill="none" stroke-linecap="round" stroke-linejoin="round"><defs><radialGradient id="core" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#E0852E" stop-opacity=".55"/><stop offset="100%" stop-color="#E0852E" stop-opacity="0"/></radialGradient></defs><g stroke="#2E6B4F" stroke-width="2" opacity=".7"><polyline points="52,74 130,26 208,74"/><path d="M66 66 V150 H194 V66"/><path d="M150 150 V108 H176 V150"/></g><circle cx="130" cy="98" r="18" fill="url(#core)"/><circle cx="118" cy="150" r="13" fill="url(#core)"/><circle cx="142" cy="150" r="13" fill="url(#core)"/><g stroke="#C9A84C" stroke-width="4"><circle cx="130" cy="52" r="13"/><line x1="130" y1="65" x2="130" y2="120"/><line x1="112" y1="74" x2="148" y2="74"/><path d="M112 74 L106 100 L108 122"/><path d="M148 74 L154 100 L152 122"/><line x1="116" y1="120" x2="144" y2="120"/><path d="M120 120 L110 152 L114 186"/><path d="M140 120 L150 152 L146 186"/></g><g stroke="#C9A84C" stroke-width="3"><path d="M96 122 q12 -7 24 0"/><path d="M97 124 L94 150 H122 L119 124 Z"/><path d="M140 122 q12 -7 24 0"/><path d="M141 124 L138 150 H166 L163 124 Z"/></g><line x1="40" y1="190" x2="220" y2="190" stroke="#2E6B4F" stroke-width="2"/><g stroke="#E7D6A6" stroke-width="1.4" opacity=".9"><line x1="130" y1="86" x2="196" y2="72"/><line x1="138" y1="100" x2="206" y2="118"/><line x1="146" y1="150" x2="200" y2="168"/></g><g fill="#E7D6A6" font-family="-apple-system,Segoe UI,Roboto,sans-serif" font-size="11" font-weight="700"><text x="196" y="70">dos droit</text><text x="206" y="121">gainage</text><text x="200" y="171">jambes</text></g></svg>';
 function onboardingSeen(){ return readLS("exhome_v2_onboarded")===true; }
 function screenOnboarding(){
   var i=0, N=3;
@@ -432,7 +436,8 @@ function screenOnboarding(){
     +'</div>';
 
   var s3=el("div","onb-slide");
-  s3.innerHTML='<div class="card onb-ex"><div class="tag">Un exemple concret</div><p>Porter tes courses, <b style="color:var(--gold)">dos droit et jambes engag\u00e9es</b>, c\'est d\u00e9j\u00e0 un exercice de gainage. On t\'apprend juste \u00e0 bien le faire.</p></div>'
+  s3.innerHTML='<div class="onb-illus">'+EXH_ILLUS+'</div>'
+    +'<p class="onb-cap">Porter tes courses, dos droit et jambes engag\u00e9es : c\'est d\u00e9j\u00e0 un exercice. On t\'apprend juste \u00e0 bien le faire.</p>'
     +'<p class="onb-forwho"><b>Pour toutes celles et ceux</b> qui n\'ont pas le temps de faire du sport \u2014 mais qui bougent d\u00e9j\u00e0, chaque jour.</p>';
 
   track.appendChild(s1); track.appendChild(s2); track.appendChild(s3);
@@ -514,9 +519,89 @@ function screenLogin(){
   go.onclick=attempt;
   pinIn.addEventListener("keydown",function(e){ if(e.key==="Enter") attempt(); });
 
+  var links=el("div"); links.style.cssText="margin:14px 0 2px;display:flex;flex-direction:column;gap:9px";
+  var reg=el("button","btn line block","Créer mon compte"); reg.onclick=screenRegister; links.appendChild(reg);
+  var forgot=el("button"); forgot.style.cssText="background:none;border:none;color:var(--dim);font-size:13px;cursor:pointer;text-decoration:underline;text-underline-offset:3px;align-self:center"; forgot.textContent="Mot de passe oublié ?"; forgot.onclick=screenForgot; links.appendChild(forgot);
+  app.appendChild(links);
+
   app.appendChild(phraseCard());
   var disc=el("button","btn ghost block","Découvrir Ex Home"); disc.style.marginTop="12px"; disc.onclick=function(){ openPresentation(screenLogin); }; app.appendChild(disc);
   var vf=el("div","center muted"); vf.style.cssText="margin-top:18px;font-size:11px;letter-spacing:.05em"; vf.textContent="Ex Home v2 · "+APP_VERSION; app.appendChild(vf);
+}
+
+/* ---------- AUTO-INSCRIPTION (le client crée son compte) ---------- */
+function screenRegister(){
+  clear();
+  topbar("Créer mon compte","Ex Home", screenLogin);
+  var card=el("div","card");
+  var nom=input("",{placeholder:"Prénom Nom", autocapitalize:"words"});
+  var pw=input("",{placeholder:"Choisis un mot de passe", type:"password"});
+  var pw2=input("",{placeholder:"Confirme le mot de passe", type:"password"});
+  card.appendChild(field("Nom complet", nom));
+  card.appendChild(field("Mot de passe", pw));
+  card.appendChild(field("Confirmer le mot de passe", pw2));
+  var go=el("button","btn primary block","Créer mon compte"); card.appendChild(go);
+  var err=el("div","center"); err.style.cssText="color:var(--danger);margin:10px 0 0;font-size:13px"; card.appendChild(err);
+  app.appendChild(card);
+  go.onclick=function(){
+    var n=(nom.value||"").trim();
+    var p=(pw.value||"").trim(), p2=(pw2.value||"").trim();
+    if(!n){ err.textContent="Indique ton nom."; return; }
+    if(p.length<4){ err.textContent="Mot de passe : 4 caractères minimum."; return; }
+    if(p!==p2){ err.textContent="Les deux mots de passe ne correspondent pas."; return; }
+    go.disabled=true; go.textContent="Création…";
+    loadRoster().then(seedIfEmpty).then(function(r){
+      var cli=emptyClient(n); cli.pin=p;
+      var base=cli.login, k=1, taken=(r.clients||[]).map(function(x){return x.login;});
+      while(taken.indexOf(cli.login)>-1){ cli.login=base+(++k); }
+      return saveClient(cli).then(function(){
+        r.clients=(r.clients||[]).concat([{id:cli.id,nom:cli.nom,login:cli.login,pin:cli.pin,selfSignup:true}]);
+        return saveRoster(r);
+      }).then(function(){ registerDone(cli); });
+    }).catch(function(){ err.textContent="Erreur réseau, réessaie."; go.disabled=false; go.textContent="Créer mon compte"; });
+  };
+}
+function registerDone(cli){
+  clear();
+  var card=el("div","card center"); card.style.marginTop="36px";
+  card.innerHTML='<div style="font-size:34px">✅</div>'
+    +'<h3 style="margin:10px 0 4px;font-size:19px">Compte créé&nbsp;!</h3>'
+    +'<p class="muted" style="font-size:13px;margin:0 0 4px">Note bien ton identifiant pour te reconnecter&nbsp;:</p>'
+    +'<div style="margin:10px 0 4px;font-size:21px;font-weight:800;color:var(--gold);letter-spacing:.02em">'+esc(cli.login)+'</div>';
+  var go=el("button","btn primary block","Entrer dans mon espace"); go.style.marginTop="14px";
+  go.onclick=function(){ setSession({role:"client",clientId:cli.id,nom:cli.nom}); render(); };
+  card.appendChild(go); app.appendChild(card);
+}
+
+/* ---------- MOT DE PASSE OUBLIÉ (réinitialisation par le coach) ---------- */
+function screenForgot(){
+  clear();
+  topbar("Mot de passe oublié","Ex Home", screenLogin);
+  var card=el("div","card");
+  var info=el("p","muted"); info.style.cssText="font-size:13px;line-height:1.5;margin:0 0 14px";
+  info.textContent="Saisis ton identifiant : ton coach sera prévenu et te communiquera un nouveau mot de passe.";
+  card.appendChild(info);
+  var idIn=input("",{placeholder:"Ton identifiant", autocapitalize:"none", autocorrect:"off"});
+  card.appendChild(field("Identifiant", idIn));
+  var go=el("button","btn primary block","Demander une réinitialisation"); card.appendChild(go);
+  var err=el("div","center"); err.style.cssText="color:var(--danger);margin:10px 0 0;font-size:13px"; card.appendChild(err);
+  app.appendChild(card);
+  go.onclick=function(){
+    var u=(idIn.value||"").trim().toLowerCase();
+    if(!u){ err.textContent="Entre ton identifiant."; return; }
+    go.disabled=true; go.textContent="Envoi…";
+    loadRoster().then(seedIfEmpty).then(function(r){
+      var found=false;
+      r.clients=(r.clients||[]).map(function(c){ if(c.login===u){ found=true; c.resetRequested=true; } return c; });
+      if(!found){ err.textContent="Identifiant introuvable."; go.disabled=false; go.textContent="Demander une réinitialisation"; return; }
+      saveRoster(r).then(function(){
+        clear();
+        var d=el("div","card center"); d.style.marginTop="36px";
+        d.innerHTML='<div style="font-size:34px">📨</div><h3 style="margin:10px 0 4px;font-size:19px">Demande envoyée</h3><p class="muted" style="font-size:13px;line-height:1.5">Ton coach va réinitialiser ton mot de passe et te le communiquer.</p>';
+        var b=el("button","btn primary block","Retour à la connexion"); b.style.marginTop="12px"; b.onclick=screenLogin; d.appendChild(b); app.appendChild(d);
+      });
+    }).catch(function(){ err.textContent="Erreur réseau, réessaie."; go.disabled=false; go.textContent="Demander une réinitialisation"; });
+  };
 }
 
 /* ---------- ROSTER (coach) ---------- */
@@ -537,6 +622,15 @@ function screenRoster(){
       info.innerHTML='<div style="font-weight:700">'+esc(cl.nom)+'</div><div class="muted" style="font-size:12px">Identifiant : '+esc(cl.login)+'</div>';
       card.appendChild(info);
       var beltSpan=el("span","pill","…"); card.appendChild(beltSpan);
+      if(cl.resetRequested){
+        var rk=el("button","btn line"); rk.style.cssText="padding:6px 10px;font-size:12px;margin-left:6px"; rk.textContent="🔑 Réinit.";
+        rk.onclick=function(ev){ ev.stopPropagation();
+          var np=window.prompt("Nouveau mot de passe pour "+cl.nom+" :"); if(np==null) return; np=String(np).trim();
+          if(np.length<4){ toast("4 caractères minimum."); return; }
+          loadRoster().then(function(rr){ rr.clients=(rr.clients||[]).map(function(x){ if(x.id===cl.id){ x.pin=np; x.resetRequested=false; } return x; }); return saveRoster(rr); }).then(function(){ toast("Mot de passe réinitialisé ✓"); screenRoster(); });
+        };
+        card.appendChild(rk);
+      }
       card.onclick=function(){ openClient(cl.id, false); };
       list.appendChild(card);
       loadClient(cl.id).then(function(full){ if(full){ if(full.photo){ av.style.backgroundImage="url("+full.photo+")"; av.style.backgroundSize="cover"; av.style.backgroundPosition="center"; av.textContent=""; } var b=belt((full.joursReussis||[]).length); beltSpan.textContent=b.n; beltSpan.style.color=b.c; } });
@@ -2191,6 +2285,125 @@ var FONDEMENTS=[
  {t:"Recommandations OMS", d:"L'Organisation mondiale de la santé recommande au moins 150 minutes d'activité modérée par semaine ; les atteindre est associé à une réduction nette du risque de mortalité toutes causes.", s:"OMS"},
  {t:"Pas quotidiens & longévité", d:"Le risque de mortalité diminue de façon mesurable à mesure que le nombre de pas quotidiens augmente, avec des bénéfices observés dès quelques milliers de pas par jour.", s:"Études épidémiologiques"}
 ];
+/* ===================== Encart animé « L'ergoptimisation » ===================== */
+var ERGO_PAIRS = [
+  { tache:"Vider le lave-vaisselle",       exo:"Squat" },
+  { tache:"Repasser · porter les courses", exo:"Good morning" },
+  { tache:"Ranger en hauteur",             exo:"Fente montante" },
+  { tache:"Monter les escaliers",          exo:"Renfo jambes" }
+];
+var ERGO_STEPS = [
+  { n:1, titre:"L'audit découverte",         acteur:"Vous",         desc:"Vous faites le point sur vos tâches du quotidien et votre posture de départ. C'est la base de votre ergoptimisation." },
+  { n:2, titre:"Votre programme sur-mesure", acteur:"Ergoptimiste", desc:"Votre coach vous alloue, dans l'appli, les gestes à transformer et la bonne exécution pour chacun." },
+  { n:3, titre:"Vous pratiquez chez vous",   acteur:"Vous",         desc:"Vous réalisez vos « ex home » au fil de la journée. Vous gagnez en force et votre posture se corrige." },
+  { n:4, titre:"Le coach fait évoluer",      acteur:"Ergoptimiste", desc:"De nouveaux exercices se débloquent et le programme s'adapte à vos progrès. La boucle continue." }
+];
+function injectErgoCSS(){
+  if(document.getElementById("exhErgoCSS")) return;
+  var s=document.createElement("style"); s.id="exhErgoCSS";
+  s.textContent=".exh-ergo{position:relative;max-width:1140px;margin:0 auto 14px;background:radial-gradient(130% 90% at 20% 0%, #18402F 0%, #0F2820 46%, #09180F 100%);border:1px solid rgba(201,168,76,.22);border-radius:26px;padding:30px 30px 26px;box-shadow:0 24px 60px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.05);overflow:hidden}"
+   +".exh-ergo-head{display:flex;justify-content:space-between;flex-wrap:wrap;gap:14px;margin-bottom:22px}"
+   +".exh-ergo-htxt{max-width:560px}"
+   +".exh-ergo-eyb{display:flex;align-items:center;gap:10px;margin-bottom:12px}"
+   +".exh-ergo-logo{width:34px;height:34px;border-radius:10px;background:linear-gradient(150deg,#0F2A1E,#0A1A12);border:1px solid #C9A84C;display:flex;align-items:center;justify-content:center;flex:none}"
+   +".exh-ergo-eyb .lbl{font-size:11.5px;text-transform:uppercase;letter-spacing:.16em;color:#C9A84C;font-weight:800}"
+   +".exh-ergo h2{font-size:32px;line-height:1.12;font-weight:800;letter-spacing:-.02em;margin:0;color:#F5F0E8}"
+   +".exh-ergo h2 em{font-style:normal;color:#C9A84C}"
+   +".exh-ergo-sub{font-size:16px;line-height:1.5;color:#C7D8CC;max-width:520px;margin-top:12px}"
+   +".exh-ergo-suivi{align-self:flex-start;display:inline-flex;align-items:center;gap:8px;background:rgba(20,58,45,.6);border:1px solid rgba(201,168,76,.25);border-radius:999px;padding:8px 14px;font-size:13px;font-weight:700;color:#F5F0E8;white-space:nowrap}"
+   +".exh-ergo-suivi .d{width:9px;height:9px;border-radius:50%;background:#6FCF97;box-shadow:0 0 0 4px rgba(111,207,151,.18)}"
+   +".exh-ergo-grid{display:grid;grid-template-columns:minmax(300px,1fr) 1.15fr;gap:20px;align-items:stretch}"
+   +".exh-ergo-vid{position:relative;background:#0B2016;border:1px solid rgba(201,168,76,.18);border-radius:20px;overflow:hidden;min-height:360px}"
+   +".exh-ergo-vid video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}"
+   +".exh-ergo-ov{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:15px;text-align:center;padding:20px;background:radial-gradient(90% 70% at 50% 40%, rgba(24,64,47,.55), rgba(9,24,15,.92));cursor:pointer}"
+   +".exh-ergo-play{width:76px;height:76px;border-radius:50%;background:linear-gradient(180deg,#F4DE9C,#C9A84C);box-shadow:0 12px 32px rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;animation:exhPulse 2.6s infinite}"
+   +".exh-ergo-play svg{width:26px;height:26px;margin-left:4px}"
+   +".exh-ergo-ovt{font-size:15px;font-weight:800;color:#F5F0E8}"
+   +".exh-ergo-ovs{font-size:12.5px;color:#9FB6A8;margin-top:2px}"
+   +".exh-ergo-badge{position:absolute;top:12px;left:12px;display:inline-flex;align-items:center;gap:7px;background:rgba(9,24,15,.55);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(201,168,76,.3);border-radius:999px;padding:6px 11px;font-size:12px;font-weight:800;color:#F5F0E8}"
+   +".exh-ergo-badge .c{width:15px;height:15px;border-radius:50%;background:#6FCF97;color:#0B2016;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900}"
+   +".exh-ergo-vchip{position:absolute;top:12px;right:12px;background:rgba(9,24,15,.55);border:1px solid rgba(201,168,76,.28);border-radius:7px;padding:4px 9px;font-size:11px;font-weight:800;letter-spacing:.04em;color:#C9A84C}"
+   +".exh-ergo-cap{position:absolute;left:16px;right:16px;bottom:16px;height:24px}"
+   +".exh-ergo-cap span{position:absolute;left:0;bottom:0;font-size:16px;font-weight:800;letter-spacing:-.01em;opacity:0;animation:exhChip 14.4s infinite}"
+   +".exh-ergo-steps{display:flex;flex-direction:column}"
+   +".exh-ergo-step{display:flex;gap:16px}"
+   +".exh-ergo-rail{width:44px;flex:none;display:flex;flex-direction:column;align-items:center}"
+   +".exh-ergo-num{width:44px;height:44px;border-radius:50%;background:linear-gradient(150deg,#F4DE9C,#C9A84C);color:#0F2820;font-size:17px;font-weight:800;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 6px rgba(201,168,76,.12);animation:exhStepGlow 4s infinite}"
+   +".exh-ergo-conn{width:2px;flex:1;min-height:22px;margin:4px 0;background-image:linear-gradient(#C9A84C 40%, transparent 0);background-size:2px 10px;background-repeat:repeat-y;animation:exhFlowBg 1.1s linear infinite}"
+   +".exh-ergo-ct{padding-bottom:18px;flex:1}"
+   +".exh-ergo-ct .ti{display:flex;align-items:center;gap:10px;flex-wrap:wrap}"
+   +".exh-ergo-ct b{font-size:17px;font-weight:800;color:#F5F0E8}"
+   +".exh-ergo-tag{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.09em;border-radius:999px;padding:3px 9px}"
+   +".exh-ergo-ct .desc{font-size:14px;line-height:1.5;color:#AFC4B6;max-width:400px;margin-top:5px}"
+   +".exh-ergo-stats{display:flex;gap:10px;margin-top:6px}"
+   +".exh-ergo-stat{flex:1;background:rgba(20,58,45,.55);border:1px solid rgba(201,168,76,.2);border-radius:14px;padding:12px 14px}"
+   +".exh-ergo-stat .v{font-size:22px;font-weight:800}"
+   +".exh-ergo-stat .k{font-size:12px;color:#AFC4B6;margin-top:2px}"
+   +"@keyframes exhPulse{0%{box-shadow:0 0 0 0 rgba(201,168,76,.45)}70%{box-shadow:0 0 0 22px rgba(201,168,76,0)}100%{box-shadow:0 0 0 0 rgba(201,168,76,0)}}"
+   +"@keyframes exhStepGlow{0%,100%{opacity:.55}50%{opacity:1}}"
+   +"@keyframes exhFlowBg{to{background-position:0 10px}}"
+   +"@keyframes exhChip{0%,26%{opacity:0;transform:translateY(10px)}5%,22%{opacity:1;transform:translateY(0)}}"
+   +"@media(max-width:760px){.exh-ergo{padding:22px 18px}.exh-ergo h2{font-size:25px}.exh-ergo-grid{grid-template-columns:1fr}.exh-ergo-vid{min-height:300px}}"
+   +"@media(prefers-reduced-motion:reduce){.exh-ergo *{animation:none!important}.exh-ergo-cap span{opacity:0}.exh-ergo-cap span:first-child{opacity:1}}";
+  document.head.appendChild(s);
+}
+function renderErgoExplainer(){
+  injectErgoCSS();
+  var wrap=el("div","exh-ergo");
+  var head=el("div","exh-ergo-head");
+  var htxt=el("div","exh-ergo-htxt");
+  htxt.innerHTML='<div class="exh-ergo-eyb"><span class="exh-ergo-logo"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5 h8 M5 12 h6 M5 19 h8" stroke="#C9A84C"/><path d="M17 5 v14 M17 5 l4 3.4 M17 19 l4 -3.4" stroke="#E0852E"/></svg></span><span class="lbl">EX HOME · L\'ergoptimisation</span></div>'
+    +'<h2>Vos gestes du quotidien deviennent votre <em>entraînement</em>.</h2>'
+    +'<div class="exh-ergo-sub">Sans matériel, sans y consacrer une heure. Chaque tâche ménagère, exécutée avec la bonne posture, devient un exercice qui vous rend plus fort·e.</div>';
+  head.appendChild(htxt);
+  var suivi=el("div","exh-ergo-suivi"); suivi.innerHTML='<span class="d"></span>Suivi par votre ergoptimiste';
+  head.appendChild(suivi);
+  wrap.appendChild(head);
+
+  var grid=el("div","exh-ergo-grid");
+
+  var vid=el("div","exh-ergo-vid");
+  var video=el("video"); video.setAttribute("playsinline",""); video.setAttribute("preload","metadata");
+  vid.appendChild(video);
+  vid.insertAdjacentHTML("beforeend",
+    '<div class="exh-ergo-badge"><span class="c">✓</span>Posture guidée</div>'
+    +'<div class="exh-ergo-vchip">VIDÉO</div>'
+    +'<div class="exh-ergo-cap">'
+    + ERGO_PAIRS.map(function(p,i){ return '<span style="animation-delay:'+(i*3.6)+'s"><span class="t" style="color:#F5F0E8">'+esc(p.tache)+'</span> <span class="a" style="color:#C9A84C">→ '+esc(p.exo)+'</span></span>'; }).join("")
+    +'</div>');
+  var ov=el("div","exh-ergo-ov");
+  ov.innerHTML='<div class="exh-ergo-play"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="#0F2820"/></svg></div>'
+    +'<div><div class="exh-ergo-ovt">Votre vidéo de présentation</div><div class="exh-ergo-ovs">Glissez un fichier .mp4 ici pour le prévisualiser</div></div>';
+  vid.appendChild(ov);
+  ov.onclick=function(){ if(video.src){ ov.style.display="none"; video.controls=true; video.play(); } };
+  ["dragenter","dragover","dragleave","drop"].forEach(function(ev){ vid.addEventListener(ev,function(e){ e.preventDefault(); e.stopPropagation(); }); });
+  vid.addEventListener("drop",function(e){ var f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0]; if(f&&/^video\//.test(f.type)){ video.src=URL.createObjectURL(f); ov.style.display="none"; video.controls=true; video.play(); } });
+  grid.appendChild(vid);
+
+  var right=el("div","exh-ergo-steps");
+  ERGO_STEPS.forEach(function(s,i){
+    var step=el("div","exh-ergo-step");
+    var rail=el("div","exh-ergo-rail");
+    var num=el("div","exh-ergo-num", String(s.n)); num.style.animationDelay=i+"s"; rail.appendChild(num);
+    if(i<ERGO_STEPS.length-1) rail.appendChild(el("div","exh-ergo-conn"));
+    step.appendChild(rail);
+    var ergo=(s.acteur==="Ergoptimiste");
+    var tagCol=ergo?"#E0852E":"#C9A84C", tagBd=ergo?"rgba(224,133,46,.4)":"rgba(201,168,76,.4)";
+    var ct=el("div","exh-ergo-ct");
+    ct.innerHTML='<div class="ti"><b>'+esc(s.titre)+'</b><span class="exh-ergo-tag" style="color:'+tagCol+';border:1px solid '+tagBd+'">'+esc(s.acteur)+'</span></div><div class="desc">'+esc(s.desc)+'</div>';
+    step.appendChild(ct);
+    right.appendChild(step);
+  });
+  var stats=el("div","exh-ergo-stats");
+  stats.innerHTML='<div class="exh-ergo-stat"><div class="v" style="color:#C9A84C">+ Force</div><div class="k">à chaque geste répété</div></div>'
+    +'<div class="exh-ergo-stat"><div class="v" style="color:#6FCF97">Posture</div><div class="k">corrigée, durablement</div></div>';
+  right.appendChild(stats);
+  grid.appendChild(right);
+
+  wrap.appendChild(grid);
+  return wrap;
+}
+
 function openPresentation(backFn){
   clear(); topbar("Ex Home","La méthode", backFn);
   var wrap=el("div"); app.appendChild(wrap); wrap.appendChild(el("div","muted center","Chargement…"));
@@ -2201,6 +2414,7 @@ function openPresentation(backFn){
       +'<div class="muted" style="margin-top:6px;font-size:12px;letter-spacing:.18em;text-transform:uppercase">Ergo · Optimisation · Mouvement</div>'
       +'<div style="margin-top:14px;font-size:18px;font-weight:700;font-style:italic;color:var(--text);line-height:1.4">« '+TAGLINE+' »</div>';
     wrap.appendChild(hd);
+    wrap.appendChild(renderErgoExplainer());
     function block(title,text){ if(!text) return; var c=el("div","card"); c.appendChild(el("div","eyebrow",title)); var sp=el("div"); sp.style.height="8px"; c.appendChild(sp); var p=el("div"); p.style.cssText="font-size:14px;line-height:1.65;white-space:pre-wrap"; p.textContent=text; c.appendChild(p); wrap.appendChild(c); }
     block("Notre vision", a.intro);
     block("La méthode — l'ergoptimisation", a.methode);
